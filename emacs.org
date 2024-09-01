@@ -1,0 +1,914 @@
+#+title: Emacs config
+
+* Early-init
+:PROPERTIES:
+:header-args: :tangle ~/.config/emacs/early-init.el :mkdirp yes
+:END:
+** Disable package.el
+#+begin_src emacs-lisp
+  (setq package-enable-at-startup nil)
+#+end_src
+** Inhibit features I do not use
+#+begin_src emacs-lisp
+  (setq inhibit-splash-screen t
+        inhibit-startup-screen t
+        inhibit-startup-message t
+        inhibit-startup-echo-area-message t
+        inhibit-startup-buffer-menu t
+        org-modules nil
+        initial-major-mode 'fundamental-mode)
+
+  (menu-bar-mode -1)
+  (tool-bar-mode -1)
+#+end_src
+** Improve load time
+#+begin_src emacs-lisp
+  (setq gc-cons-threshold most-positive-fixnum
+        gc-cons-percentage 0.5)
+
+  (defvar dotns/default-file-name-handler-alist file-name-handler-alist)
+  (defvar dotns/default-vc-handled-backends vc-handled-backends)
+  (setq file-name-handler-alist nil
+        vc-handled-backends nil)
+  (add-hook 'emacs-startup-hook
+            (lambda ()
+              (setq gc-cons-threshold (* 1000 1000 8)
+                    gc-cons-percentage 0.1
+                    file-name-handler-alist dotns/default-file-name-handler-alist
+                    vc-handled-backends dotns/default-vc-handled-backends)))
+#+end_src
+* Init
+:PROPERTIES:
+:header-args: :tangle ~/.config/emacs/init.el :mkdirp yes
+:END:
+** Boostrap straight.el
+#+begin_src emacs-lisp
+  (defvar bootstrap-version)
+  (let ((bootstrap-file
+	 (expand-file-name
+	  "straight/repos/straight.el/bootstrap.el"
+	  (or (bound-and-true-p straight-base-dir)
+	      user-emacs-directory)))
+	(bootstrap-version 7))
+    (unless (file-exists-p bootstrap-file)
+      (with-current-buffer
+	  (url-retrieve-synchronously
+	   "https://raw.githubusercontent.com/radian-software/straight.el/develop/install.el"
+	   'silent 'inhibit-cookies)
+	(goto-char (point-max))
+	(eval-print-last-sexp)))
+    (load bootstrap-file nil 'nomessage))
+#+end_src
+*** Verbose package loading
+#+begin_src emacs-lisp
+  ;; (setq use-package-verbose t)
+#+end_src
+** Emacs settings and built-in global modes
+#+begin_src emacs-lisp
+  (setq visible-bell t)
+  (setq use-short-answers t)
+  (delete-selection-mode 1)
+  (setq custom-file (make-temp-file "emacs-custom-"))
+
+  (global-auto-revert-mode 1)
+  (global-hl-line-mode 1)
+  (save-place-mode 1)
+  (winner-mode 1)
+
+  (setq display-time-day-and-date t
+    display-time-24hr-format t)
+  (setq display-time-default-load-average nil)
+  (display-time-mode 1)
+
+  (setq focus-follows-mouse t
+        mouse-autoselect t)
+
+  (setq isearch-lazy-count t
+        isearch-repeat-on-direction-change t)
+
+  (setq list-matching-lines-jump-to-current-line t)
+
+  (when (native-comp-available-p)
+    (setq native-comp-async-report-warnings-errors 'silent
+      native-compile-prune-cache t))
+#+end_src
+*** Show startup time after it's done
+#+begin_src emacs-lisp
+  (defun dotns/display-startup-time ()
+    (message "Emacs loaded in %s with %d garbage collections."
+             (format "%.2f seconds" (float-time (time-subtract after-init-time before-init-time)))
+             gcs-done))
+
+  (add-hook 'emacs-startup-hook #'dotns/display-startup-time)
+#+end_src
+*** Theme
+#+begin_src emacs-lisp
+  (setq modus-themes-mode-line '(accented borderless)
+      modus-themes-bold-constructs t
+      modus-themes-italic-constructs t
+      modus-themes-variable-pitch-ui t
+      modus-themes-paren-match '(bold intense)
+      modus-themes-prompts '(bold intense)
+      modus-themes-org-blocks 'tinted-background
+      modus-themes-region '(bg-only))
+
+  (load-theme 'modus-vivendi t)
+#+end_src
+**** Mode line
+#+begin_src emacs-lisp
+  (defvar-local dotns/modeline-kbd-macro
+      '(:eval (when (and (mode-line-window-selected-p) defining-kbd-macro)
+                (propertize " Macro" 'face 'warning)))
+    "Mode line construct for keyboard macros.")
+
+  (defvar-local dotns/modeline-narrow
+      '(:eval (when (and (mode-line-window-selected-p) (buffer-narrowed-p))
+                (propertize " Narrow" 'face 'warning)))
+    "Mode line construct to indicate narrowing.")
+
+  (defvar-local dotns/modeline-remote-file
+      '(:eval (when (file-remote-p default-directory)
+                (propertize " " 'face 'bold)))
+    "Mode line construct to indicate remote file.")
+
+  (defvar-local dotns/modeline-dedicated
+      '(:eval (when (window-dedicated-p)
+                (propertize " " 'face 'bold)))
+    "Mode line construct to indicate dedicated window.")
+
+  (defvar-local dotns/modeline-readonly
+      '(:eval (when buffer-read-only
+                (propertize (format " %s " (char-to-string #xE0A2)))))
+    "Mode line construct to indicate readonly buffer.")
+
+  (defvar-local dotns/modeline-icon
+      '(:eval (propertize (cond
+                           ((derived-mode-p 'exwm-mode) (if (equal exwm-class-name "firefox") "" ""))
+                           ((derived-mode-p 'shell-mode) "")
+                           ((derived-mode-p 'eshell-mode) "")
+                           ((derived-mode-p 'comint-mode) "")
+                           ((derived-mode-p 'erc-mode) "")
+                           ((not buffer-file-name) "")
+                           ((derived-mode-p 'prog-mode) "")
+                           ((derived-mode-p 'org-mode) "")
+                           ((derived-mode-p 'text-mode) "")
+                           (t ""))
+                          'face 'shadow))
+    "Mode line construct to display an icon next to the buffer name")
+
+  (defvar-local dotns/modeline-buffer-name
+      '(:eval (propertize (buffer-name) 'face (cond
+                                               ((and (buffer-file-name) (buffer-modified-p)) 'italic)
+                                               ((mode-line-window-selected-p) 'bold)
+                                               (t 'shadow))))
+    "Mode line construct to display the name of the buffer.")
+
+  (defun dotns/modeline--major-mode-text ()
+    (concat "  " (capitalize (string-replace "-" " " (string-replace "-mode" "" (string-replace "-ts-mode" "" (symbol-name major-mode)))))))
+
+  (defvar-local dotns/modeline-major-mode
+      '(:eval (propertize (dotns/modeline--major-mode-text) 'face (if (mode-line-window-selected-p) 'shadow)))
+    "Mode line construct to display a prettified major mode for the buffer.")
+
+  (defun dotns/modeline--vc-branch ()
+    (when-let* ((file (buffer-file-name))
+                (backend (vc-backend file))
+                (rev (vc-working-revision file backend)))
+      (or (vc-git--symbolic-ref file) (substring rev 0 7))))
+
+  (defvar-local dotns/modeline-vc
+      '(:eval (propertize (or (when-let (branch (dotns/modeline--vc-branch)) (concat "  " branch)) "") 'face 'italic))
+    "Mode line construct for version control info.")
+
+  (defvar-local dotns/modeline-eglot
+      '(:eval (when (and (featurep 'eglot) eglot--managed-mode) (list "  " eglot--mode-line-format)))
+    "Display eglot information on relevant windows.")
+
+  (defvar-local dotns/modeline-time
+      '(:eval (unless (mode-line-window-selected-p) display-time-string))
+    "Display time on inactive windows.")
+
+  (dolist (construct '(dotns/modeline-kbd-macro
+                       dotns/modeline-narrow
+                       dotns/modeline-remote-file
+                       dotns/modeline-dedicated
+                       dotns/modeline-readonly
+                       dotns/modeline-icon
+                       dotns/modeline-buffer-name
+                       dotns/modeline-major-mode
+                       dotns/modeline-vc
+                       dotns/modeline-eglot
+                       dotns/modeline-time))
+    (put construct 'risky-local-variable t))
+
+  (setq-default mode-line-format
+                '("%e"
+                  dotns/modeline-kbd-macro
+                  dotns/modeline-narrow
+                  dotns/modeline-remote-file
+                  dotns/modeline-dedicated
+                  dotns/modeline-readonly
+
+                  " " dotns/modeline-icon " " dotns/modeline-buffer-name
+                  dotns/modeline-vc
+                  dotns/modeline-major-mode
+                  dotns/modeline-eglot
+
+                  ;; Can be simplified in emacs 30
+                  (:eval (propertize " " 'display `((space :align-to (- right-fringe ,(string-width (format-time-string display-time-string)))))))
+                  dotns/modeline-time))
+
+  ;; Styling
+  ;; mode-line, mode-line-inactive
+  ;; custom-set-faces overrides any future theming
+  ;; set-face-attribute sets now, no overrides
+  (defun dotns/modeline--color-hook ()
+    (modus-themes-with-colors
+      (custom-set-faces
+       `(mode-line ((t :background ,bg-main :box nil))))
+      (custom-set-faces
+       `(mode-line-inactive ((t :background ,bg-alt :box nil))))))
+
+  (dotns/modeline--color-hook)
+  (add-hook 'modus-themes-after-load-theme-hook #'dotns/modeline--color-hook)
+
+  ;; simpler: modus-themes-common-palette-overrides
+#+end_src
+*** Fonts
+**** Global
+#+begin_src emacs-lisp
+  (set-face-attribute 'default nil :font "Liberation Mono" :height 100)
+  (set-face-attribute 'fixed-pitch nil :font "Liberation Mono" :height 100)
+  (set-face-attribute 'variable-pitch nil :font "DejaVu Sans" :height 100)
+#+end_src
+*** Line numbers, tabs and wrapping
+#+begin_src emacs-lisp
+  (dolist (mode '(org-mode-hook
+          term-mode-hook
+          shell-mode-hook
+          treemacs-mode-hook
+          eshell-mode-hook))
+    (add-hook mode (lambda () (display-line-numbers-mode 0))))
+
+  (global-display-line-numbers-mode 1)
+  (setq tab-always-indent 'complete)
+  (setq-default tab-width 4
+        indent-tabs-mode nil)
+#+end_src
+*** Calendar
+#+begin_src emacs-lisp
+  (setq calendar-mark-holidays-flag t
+    calendar-week-start-day 1
+    calendar-date-style 'iso)
+#+end_src
+*** Global hotkeys
+#+begin_src emacs-lisp
+  (use-package crux :straight t :defer t)
+  (use-package simpleclip :straight t :defer t)
+
+  (defun ralaul/frac-window-height ()
+    (max 1 (/ (window-height (selected-window)) 3)))
+
+  (use-package emacs
+    :bind ( :map global-map
+        ("C-x C-z" . nil)
+
+        ("M-c" . capitalize-dwim)
+        ("M-l" . downcase-dwim)
+        ("M-u" . upcase-dwim)
+
+        ("M-z" . zap-up-to-char)
+        ("C-z" . zap-to-char)
+
+        ("H-x" . simpleclip-cut)
+        ("H-c" . simpleclip-copy)
+        ("H-v" . simpleclip-paste)
+
+        ("C-v" . (lambda () (interactive) (next-line (ralaul/frac-window-height)) (recenter)))
+        ("M-V" . (lambda () (interactive) (previous-line (ralaul/frac-window-height)) (recenter)))
+
+        ("s-o" . crux-open-with)
+        ("H-d" . #'crux-duplicate-current-line-or-region)
+        ("H-M-d" . #'crux-duplicate-and-comment-current-line-or-region)
+        ("H-<return>" . #'crux-smart-open-line)
+        ("H-r" . #'crux-rename-buffer-and-file)
+        ("H-k" . crux-kill-whole-line)))
+
+  (global-set-key (kbd "C-v") (lambda () (interactive) (next-line (ralaul/frac-window-height)) (recenter)))
+  (global-set-key (kbd "M-v") (lambda () (interactive) (previous-line (ralaul/frac-window-height)) (recenter)))
+#+end_src
+** Icons
+#+begin_src emacs-lisp
+  (use-package nerd-icons :straight t)
+  (use-package all-the-icons :straight t)
+#+end_src
+** Proced
+#+begin_src emacs-lisp
+  (use-package proced
+    :commands (proced)
+    :config (setq proced-auto-update-flag 'visible
+                  proced-enable-color-flag t
+                  proced-auto-update-interval 5
+                  proced-descend t
+                  proced-filter 'user))
+#+end_src
+** Magit
+#+begin_src emacs-lisp
+  (use-package magit :straight t
+    :commands (magit)
+    :custom
+    (magit-display-buffer-function #'magit-display-buffer-same-window-except-diff-v1))
+#+end_src
+** Git timemachine
+#+begin_src emacs-lisp
+  (use-package git-timemachine :straight t)
+#+end_src
+** Dired
+#+begin_src emacs-lisp
+  (use-package dired
+    :commands (dired dired-jump)
+    :custom ((dired-listing-switches "-AGFhlv --group-directories-first --time-style=long-iso"))
+    :config
+    (setq dired-auto-revert-buffer #'dired-directory-changed-p
+          dired-mouse-drag-files t))
+
+  (use-package dired-single :straight t
+    :after dired
+    :bind
+    ([remap dired-find-file] . dired-single-buffer)
+    ([remap dired-mouse-find-file-other-window] . dired-single-buffer-mouse)
+    ([remap dired-up-directory] . dired-single-up-directory))
+
+  (use-package dired-subtree :straight t
+    :after dired
+    :bind ( :map dired-mode-map
+            ("<tab>" . dired-subtree-toggle)))
+
+  (use-package wdired
+    :after dired
+    :config
+    (setq wdired-allow-to-change-permissions t
+          wdired-create-parent-directories t))
+
+  (use-package all-the-icons-dired :straight t
+    :after dired
+    :hook (dired-mode . all-the-icons-dired-mode))
+
+  (use-package dired-open :straight t
+    :after dired
+    :commands (dired dired-jump))
+
+  (use-package dired-collapse :straight t
+    :after dired
+    :hook (dired-mode . dired-collapse-mode))
+
+  (use-package dired-avfs :straight t
+    :after dired)
+
+  (use-package dired-hacks-utils :straight t
+    :after dired)
+#+end_src
+** Org mode
+#+begin_src emacs-lisp
+  (use-package org :straight t :defer t
+    :custom
+    (org-adapt-indentation nil)
+    (org-catch-invisible-edits 'show)
+    (org-insert-heading-respect-content t)
+    (org-fontify-quote-and-verse-blocks t)
+    :config
+    (set-face-attribute 'org-level-1 nil :font "Dejavu Sans" :height 1.4 :foreground "CornflowerBlue")
+    (set-face-attribute 'org-level-2 nil :font "Dejavu Sans" :height 1.3)
+    (set-face-attribute 'org-level-3 nil :font "Dejavu Sans" :height 1.2)
+    (set-face-attribute 'org-level-4 nil :font "Dejavu Sans" :height 1.1)
+    (set-face-attribute 'org-level-5 nil :font "Dejavu Sans" :height 1.05)
+    (set-face-attribute 'org-level-6 nil :font "Dejavu Sans" :height 1.02)
+
+    (set-face-attribute 'org-block nil           :inherit 'fixed-pitch)
+    (set-face-attribute 'org-formula nil         :inherit 'fixed-pitch)
+    (set-face-attribute 'org-code nil            :inherit '(shadow fixed-pitch))
+    (set-face-attribute 'org-table nil           :inherit '(shadow fixed-pitch))
+    (set-face-attribute 'org-verbatim nil        :inherit '(shadow fixed-pitch))
+    (set-face-attribute 'org-special-keyword nil :inherit '(font-lock-comment-face fixed-pitch))
+    (set-face-attribute 'org-checkbox nil        :inherit '(font-lock-comment-face fixed-pitch))
+    (set-face-attribute 'org-meta-line nil       :inherit '(font-lock-comment-face fixed-pitch)))
+
+  (use-package org-tempo
+    :after org
+    :config
+    (add-to-list 'org-structure-template-alist '("sh" . "src shell"))
+    (add-to-list 'org-structure-template-alist '("el" . "src emacs-lisp"))
+    (add-to-list 'org-structure-template-alist '("py" . "src python"))
+    (add-to-list 'org-structure-template-alist '("json" . "src json"))
+    (add-to-list 'org-structure-template-alist '("ty" . "src typescript"))
+    (add-to-list 'org-structure-template-alist '("js" . "src javascript"))
+    (add-to-list 'org-structure-template-alist '("lua" . "src lua")))
+
+  (use-package org-roam :straight t
+    :after org
+    :custom
+    (org-roam-directory "~/ORoam")
+    (org-roam-completion-everywhere t)
+    :bind
+    (("H-n i" . org-roam-node-insert)
+     ("H-n f" . org-roam-node-find)
+     :map org-mode-map
+     ("C-M-i" . completion-at-point))
+    :config
+    (org-roam-db-autosync-mode 1))
+
+  (use-package org-bullets :straight t
+    :after org
+    :hook (org-mode . org-bullets-mode))
+#+end_src
+*** Presentation
+#+begin_src emacs-lisp
+  (defun ralaul/org-present-enable ()
+      (org-present-big)
+      (setq-local ralaul/present-cookie (face-remap-add-relative 'fixed-pitch :height 1.5))
+      (org-display-inline-images))
+
+  (defun ralaul/org-present-disable ()
+    (org-present-small)
+    (unless (equal ralaul/present-cookie nil)
+      (face-remap-remove-relative ralaul/present-cookie))
+    (org-remove-inline-images))
+
+  (setq org-present-text-scale 3.5)
+
+  (use-package org-present :straight t
+    :after org
+    :hook
+    (org-present-mode . ralaul/org-present-enable)
+    (org-present-mode-quit . ralaul/org-present-disable))
+#+end_src
+** Window management (Xorg)
+*** Multi-monitor
+Allocates workspaces to monitors if exwm is used.
+#+begin_src emacs-lisp
+  (when (equal (getenv "EXWM") "true")
+    (defvar dotns/screen--workspace-configs '((2 . ((1 . (1 2 3 4 5))))
+                                              (3 . ((1 . (1 2 3))
+                                                    (2 . (4 5 6))))
+                                              (4 . ((1 . (1 2 3))
+                                                    (2 . (4 5))
+                                                    (3 . (6 7)))))
+      "Workspace to display mappings")
+
+    (defun dotns/get-screens ()
+        (let* ((primary-display (car (exwm-randr--get-monitors)))
+               (screens (mapcar #'car (car (cdr (cdr (exwm-randr--get-monitors)))))))
+          (cons primary-display (remove primary-display screens))))
+
+    (defun dotns/screen--get-config-for-displays (screens)
+      (cdr (assoc (length screens) dotns/screen--workspace-configs)))
+
+    (defun dotns/screen--to-plist (primary-display screens)
+      (let* ((config (cdr (assoc (length screens) dotns/screen--workspace-configs)))
+             (non-primary-displays (remove primary-display screens))
+             plist)
+        (dolist (workspace-pair config)
+          (let ((display (nth (1- (car workspace-pair)) non-primary-displays)))
+            (dolist (workspace (cdr workspace-pair))
+              (setq plist (append plist (list workspace display))))))
+        plist))
+
+    (defun dotns/exwm-screens-changed ()
+      (when (executable-find "autorandr")
+        (dotns/run-silently "autorandr -c"))
+      (let ((screens (dotns/get-screens)))
+        (when (length> screens 1)
+          (setq exwm-randr-workspace-monitor-plist (dotns/screen--to-plist (car screens) screens))))
+      (exwm-randr-refresh)))
+#+end_src
+*** EXWM
+#+begin_src emacs-lisp
+  (defun dotns/run-silently (cmd)
+    (call-process-shell-command (concat cmd "&") nil 0))
+
+  (when (equal (getenv "EXWM") "true")
+    (message "EXWM env var is set, loading exwm")
+
+    (defun dotns/exwm-update-buffer-name ()
+      (exwm-workspace-rename-buffer (format "%s: %s" exwm-class-name exwm-title)))
+
+    (defun dotns/exwm-init-hook ()
+      (setq ediff-window-setup-function 'ediff-setup-windows-plain)
+
+      ;; not optimal, from https://github.com/minad/corfu/issues/235
+      (define-advice corfu--make-frame (:around (fn frame x y w h b) exwm)
+        (if (bound-and-true-p exwm--connection)
+            (prog1
+                (let ((inhibit-redisplay t)
+                      (geo (frame-monitor-geometry exwm-workspace--current)))
+                  ;; When we're positioning the corfu frame, make it relative
+                  ;; to the current monitor. The info frame will position
+                  ;; itself relative to corfu.
+                  (when (eq frame corfu--frame)
+                    (setq x (+ x (car geo))
+                          y (+ y (cadr geo))))
+                  ;; Make sure corfu can see a parent frame, even if we've
+                  ;; removed it.
+                  (cl-letf (((symbol-function #'frame-parent)
+                             (lambda (frame)
+                               (or (frame-parameter frame 'parent-frame)
+                                   exwm-workspace--current))))
+                    (funcall fn frame x y w h b))))
+          (funcall fn frame x y w h b)))
+
+      (dotns/run-silently "unclutter -idle 5")
+      (dotns/run-silently "lxpolkit"))
+
+    ;; exwm-occupied windows survive kill-buffer-and-window, the X window gets killed though
+    (defun dotns/kill-buffer-and-window ()
+      (interactive)
+      (let ((isexwm (equal major-mode 'exwm-mode)))
+        (kill-buffer-and-window)
+        (when isexwm (delete-window))))
+
+    (use-package exwm
+      :straight t
+      :custom
+      (exwm-workspace-number 10)
+
+      (exwm-input-prefix-keys
+       '(?\M-x ?\M-:
+         ?\C-q ?\C-u ?\C-x))
+
+      (exwm-input-simulation-keys
+       `(([?\C-b] . [left])
+         ([?\M-b] . [C-left])
+         ([?\C-f] . [right])
+         ([?\M-f] . [C-right])
+         ([?\C-p] . [up])
+         ([?\M-p] . [C-up])
+         ([?\C-n] . [down])
+         ([?\M-n] . [C-down])
+         (,(kbd "C-S-x") . [C-x])
+         (,(kbd "C-S-c") . [C-c])
+         (,(kbd "C-S-v") . [C-v])
+         ([?\C-a] . [home])
+         ([?\C-e] . [end])
+         ([?\M-v] . [prior])
+         ([?\C-v] . [next])
+         ([?\C-d] . [delete])
+         ([?\C-k] . [S-end delete])))
+
+      (exwm-input-global-keys
+       `(([?\s-r] . exwm-reset)
+         ([?\s-q] . dotns/kill-buffer-and-window)
+         ([?\s-w] . exwm-workspace-switch)
+
+         ([?\s-b] . windmove-left)
+         ([?\s-f] . windmove-right)
+         ([?\s-p] . windmove-up)
+         ([?\s-n] . windmove-down)
+         (,(kbd "s-<left>") . windmove-left)
+         (,(kbd "s-<right>") . windmove-right)
+         (,(kbd "s-<up>") . windmove-up)
+         (,(kbd "s-<down>") . windmove-down)
+
+         ([?\s-B] . windmove-swap-states-left)
+         ([?\s-F] . windmove-swap-states-right)
+         ([?\s-P] . windmove-swap-states-up)
+         ([?\s-N] . windmove-swap-states-down)
+         (,(kbd "S-s-<left>") . windmove-swap-states-left)
+         (,(kbd "S-s-<right>") . windmove-swap-states-right)
+         (,(kbd "S-s-<up>") . windmove-swap-states-up)
+         (,(kbd "S-s-<down>") . windmove-swap-states-down)
+
+         (,(kbd "C-s-b") . shrink-window-horizontally)
+         (,(kbd "C-s-f") . enlarge-window-horizontally)
+         (,(kbd "C-s-p") . enlarge-window)
+         (,(kbd "C-s-n") . shrink-window)
+         (,(kbd "C-s-<left>") . shrink-window-horizontally)
+         (,(kbd "C-s-<right>") . enlarge-window-horizontally)
+         (,(kbd "C-s-<up>") . enlarge-window)
+         (,(kbd "C-s-<down>") . shrink-window)
+
+         ([?\s-&] . (lambda (command)
+                      (interactive (list (read-shell-command "$ ")))
+                      (dotns/run-silently command)))
+
+         ,@(mapcar (lambda (i)
+                     `(,(kbd (format "s-%d" i)) .
+                       (lambda ()
+                         (interactive)
+                         (exwm-workspace-switch-create ,i))))
+                   (number-sequence 0 9))
+         ,@(mapcar (lambda (i)
+                     `(,(kbd (format "C-s-%d" i)) .
+                       (lambda ()
+                         (interactive)
+                         (exwm-workspace-swap exwm-workspace-current-index ,i))))
+                   (number-sequence 0 9))
+         ,@(mapcar (lambda (i)
+                     `(,(kbd (format "M-s-%d" i)) .
+                       (lambda ()
+                         (interactive)
+                         (exwm-workspace-move-window ,i))))
+                   (number-sequence 0 9))))
+      :config
+
+      (add-hook 'exwm-init-hook #'dotns/exwm-init-hook)
+      (add-hook 'exwm-update-class-hook #'dotns/exwm-update-buffer-name)
+      (add-hook 'exwm-update-title-hook #'dotns/exwm-update-buffer-name)
+
+      (dotns/run-silently "xset r rate 150 30")
+      (dotns/run-silently "xset s off")
+      (dotns/run-silently "xset -dpms")
+
+      (exwm-enable)
+
+      (require 'exwm-randr)
+      (add-hook 'exwm-randr-screen-change-hook #'dotns/exwm-screens-changed)
+      (exwm-randr-enable)
+
+      (require 'exwm-systemtray)
+      (exwm-systemtray-enable)))
+#+end_src
+*** Desktop env
+Makes basic shortcuts, like adjusting brightness, volume, taking screenshots, locking the workstation and more just work.
+#+begin_src emacs-lisp
+  (when (equal (getenv "EXWM") "true")
+    (use-package ednc :straight t
+      :after exwm
+      :config
+      (ednc-mode 1))
+
+    (use-package desktop-environment
+      :straight t
+      :after exwm
+      :custom
+      (desktop-environment-screenshot-command "flameshot gui")
+      (desktop-environment-screenlock-command "xsecurelock")
+      :config
+      (desktop-environment-mode 1)))
+#+end_src
+*** XSettings
+Apply GTK themes when changing the emacs theme between a light and a dark one.
+#+begin_src emacs-lisp
+  (when (equal (getenv "EXWM") "true")
+    (setq dotns/gtk-theme--light "Materia-light-compact"
+          dotns/gtk-theme--dark "Materia-dark-compact")
+
+    (require 'exwm-xsettings)
+    (setq exwm-xsettings-theme `(,dotns/gtk-theme--light . ,dotns/gtk-theme--dark)
+          exwm-xsettings-icon-theme "Adawaita"
+          exwm-xsettings `(("Xft/DPI" . ,(* 96 1024))))
+    (exwm-xsettings-mode 1))
+#+end_src
+*** gsettings
+Some applications, such as vmware horizon client, read their theme-related settings from gsettings. The rare times I need to use such software, it's better to just mimic the xsettings behavior as close as we can.
+#+begin_src emacs-lisp
+  (when (and (equal (getenv "EXWM") "true") (executable-find "gsettings"))
+    (defun dotns/gsettings-update-theme ()
+      (gsettings-set-from-gvariant-string "org.gnome.desktop.interface" "gtk-theme" (exwm-xsettings--pick-theme exwm-xsettings-theme))
+      (gsettings-set-from-gvariant-string "org.gnome.desktop.interface" "icon-theme" (exwm-xsettings--pick-theme exwm-xsettings-icon-theme))
+      (gsettings-set-from-gvariant-string "org.gnome.desktop.wm.preferences" "theme" (exwm-xsettings--pick-theme exwm-xsettings-theme))
+      (gsettings-set-from-gvariant-string "org.gnome.desktop.interface" "color-scheme" (if (equal (exwm-xsettings--pick-theme exwm-xsettings-theme) dotns/gtk-theme--light)
+                                                                                           "prefer-light" "prefer-dark")))
+    (use-package gsettings :straight t :defer t
+      :config
+      (add-hook 'modus-themes-after-load-theme-hook #'dotns/gsettings-update-theme)
+      (dotns/gsettings-update-theme)
+      (gsettings-set-from-gvariant-string "org.gnome.desktop.interface" "document-font-name" "DejaVu Sans")
+      (gsettings-set-from-gvariant-string "org.gnome.desktop.interface" "font-name" "DejaVu Sans")
+      (gsettings-set-from-gvariant-string "org.gnome.desktop.interface" "monospace-font-name" "Liberation Mono")))
+#+end_src
+** Completion systems
+*** Corfu
+#+begin_src emacs-lisp
+  (use-package corfu :straight t
+    :config (setq corfu-auto t
+                  corfu-auto-delay 0
+                  corfu-min-width 20
+                  corfu-auto-prefix 1
+                  corfu-preview-current t
+                  corfu-echo-delay 0.1
+                  corfu-quit-no-match 'separator)
+    (global-corfu-mode)
+    (add-hook 'corfu-mode-hook 'corfu-echo-mode))
+
+  (use-package nerd-icons-corfu :straight t
+    :config (add-to-list 'corfu-margin-formatters #'nerd-icons-corfu-formatter))
+#+end_src
+*** Vertico
+#+begin_src emacs-lisp
+  (use-package orderless :straight t
+    :config
+    (setq completions-format 'one-column
+          completions-detailed t
+          completions-sort 'historical
+          completion-styles '(basic substring initials flex orderless)
+          completion-category-overrides '((file (styles . (basic partial-completion orderless)))
+                                          (eglot (styles . (substring flex orderless))))))
+
+  (use-package vertico :straight t
+    :custom (vertico-cycle t)
+    :config
+    (vertico-mode 1)
+    (vertico-mouse-mode 1))
+
+  (use-package vertico-prescient
+    :straight t
+    :after vertico
+    :config
+    (vertico-prescient-mode 1)
+    (prescient-persist-mode 1))
+
+  (use-package marginalia :straight t
+    :config
+    (setq marginalia-annotators '(marginalia-annotators-heavy marginalia-annotators-light nil))
+    (marginalia-mode 1))
+
+  (use-package nerd-icons-completion :straight t
+    :hook (marginalia-mode . nerd-icons-completion-marginalia-setup))
+
+  (use-package save-history
+    :straight t
+    :config
+    (savehist-mode))
+#+end_src
+*** Consult
+#+begin_src emacs-lisp
+  (use-package consult :straight t
+    :bind (;; C-c bindings in `mode-specific-map'
+       ("C-c M-x" . consult-mode-command)
+       ("C-c h" . consult-history)
+       ("C-c k" . consult-kmacro)
+       ("C-c m" . consult-man)
+       ("C-c i" . consult-info)
+       ([remap Info-search] . consult-info)
+       ;; C-x bindings in `ctl-x-map'
+       ("C-x M-:" . consult-complex-command)     ;; orig. repeat-complex-command
+       ("C-x b" . consult-buffer)                ;; orig. switch-to-buffer
+       ("C-x 4 b" . consult-buffer-other-window) ;; orig. switch-to-buffer-other-window
+       ("C-x 5 b" . consult-buffer-other-frame)  ;; orig. switch-to-buffer-other-frame
+       ("C-x r b" . consult-bookmark)            ;; orig. bookmark-jump
+       ("C-x p b" . consult-project-buffer)      ;; orig. project-switch-to-buffer
+       ;; Custom M-# bindings for fast register access
+       ("M-#" . consult-register-load)
+       ("M-'" . consult-register-store)          ;; orig. abbrev-prefix-mark (unrelated)
+       ("C-M-#" . consult-register)
+       ;; Other custom bindings
+       ("M-y" . consult-yank-pop)                ;; orig. yank-pop
+       ;; M-g bindings in `goto-map'
+       ("M-g e" . consult-compile-error)
+       ("M-g f" . consult-flymake)               ;; Alternative: consult-flycheck
+       ("M-g g" . consult-goto-line)             ;; orig. goto-line
+       ("M-g M-g" . consult-goto-line)           ;; orig. goto-line
+       ("M-g o" . consult-outline)               ;; Alternative: consult-org-heading
+       ("M-g m" . consult-mark)
+       ("M-g k" . consult-global-mark)
+       ("M-g i" . consult-imenu)
+       ("M-g I" . consult-imenu-multi)
+       ;; M-s bindings in `search-map'
+       ("M-s d" . consult-find)                  ;; Alternative: consult-fd
+       ("M-s D" . consult-locate)
+       ("M-s g" . consult-grep)
+       ("M-s G" . consult-git-grep)
+       ("M-s r" . consult-ripgrep)
+       ("M-s l" . consult-line)
+       ("M-s L" . consult-line-multi)
+       ("M-s k" . consult-keep-lines)
+       ("M-s u" . consult-focus-lines)
+       ;; Isearch integration
+       ("M-s e" . consult-isearch-history)
+       :map isearch-mode-map
+       ("M-e" . consult-isearch-history)         ;; orig. isearch-edit-string
+       ("M-s e" . consult-isearch-history)       ;; orig. isearch-edit-string
+       ("M-s l" . consult-line)                  ;; needed by consult-line to detect isearch
+       ("M-s L" . consult-line-multi)            ;; needed by consult-line to detect isearch
+       ;; Minibuffer history
+       :map minibuffer-local-map
+       ("M-s" . consult-history)                 ;; orig. next-matching-history-element
+       ("M-r" . consult-history))                ;; orig. previous-matching-history-element
+
+    ;; Enable automatic preview at point in the *Completions* buffer. This is
+    ;; relevant when you use the default completion UI.
+    :hook (completion-list-mode . consult-preview-at-point-mode)
+
+    ;; The :init configuration is always executed (Not lazy)
+    :init
+
+    ;; Optionally configure the register formatting. This improves the register
+    ;; preview for `consult-register', `consult-register-load',
+    ;; `consult-register-store' and the Emacs built-ins.
+    (setq register-preview-delay 0.5
+      register-preview-function #'consult-register-format)
+
+    ;; Optionally tweak the register preview window.
+    ;; This adds thin lines, sorting and hides the mode line of the window.
+    (advice-add #'register-preview :override #'consult-register-window)
+
+    ;; Use Consult to select xref locations with preview
+    (setq xref-show-xrefs-function #'consult-xref
+      xref-show-definitions-function #'consult-xref)
+
+    ;; Configure other variables and modes in the :config section,
+    ;; after lazily loading the package.
+    :config
+
+    ;; Optionally configure preview. The default value
+    ;; is 'any, such that any key triggers the preview.
+    ;; (setq consult-preview-key 'any)
+    ;; (setq consult-preview-key "M-.")
+    ;; (setq consult-preview-key '("S-<down>" "S-<up>"))
+    ;; For some commands and buffer sources it is useful to configure the
+    ;; :preview-key on a per-command basis using the `consult-customize' macro.
+    (consult-customize
+     consult-theme :preview-key '(:debounce 0.2 any)
+     consult-ripgrep consult-git-grep consult-grep
+     consult-bookmark consult-recent-file consult-xref
+     consult--source-bookmark consult--source-file-register
+     consult--source-recent-file consult--source-project-recent-file
+     ;; :preview-key "M-."
+     :preview-key '(:debounce 0.4 any))
+    (setq consult-narrow-key "<"))
+#+end_src
+*** Which-key
+#+begin_src emacs-lisp
+  (use-package which-key :straight t
+    :custom
+    (which-key-idle-secondary-delay 0.05)
+    (which-key-popup-type 'minibuffer)
+    (which-key-show-early-on-C-h t)
+    (which-key-idle-delay 1000000) ;; Don't show up automagically
+    :config
+    (which-key-mode))
+#+end_src
+** Editing conveniences
+*** Rainbow delimiters
+#+begin_src emacs-lisp
+  (use-package rainbow-delimiters :straight t
+    :hook (prog-mode-hook . rainbow-delimiters-mode))
+#+end_src
+*** Tree-sitter
+#+begin_src emacs-lisp
+  (use-package treesit-auto :straight t
+    :init
+    (setq treesit-auto-install t)
+    :custom
+    (global-treesit-auto-mode))
+#+end_src
+*** Goto-chg
+#+begin_src emacs-lisp
+  (use-package goto-chg :straight t
+    :bind (("H-." . goto-last-change)
+           ("H-," . goto-last-change-reverse)))
+#+end_src
+*** Substitute
+#+begin_src emacs-lisp
+  (use-package substitute :straight t
+    :bind (:map global-map ("C-c s" . substitute-prefix-map))
+    :config
+    (setopt substitute-highlight t)
+    (setq substitute-fixed-letter-case nil))
+#+end_src
+*** Color identifiers
+#+begin_src emacs-lisp
+  (use-package color-identifiers-mode :straight t :defer t
+    :hook (prog-mode . (lambda ()
+                         (unless (and (derived-mode-p 'emacs-lisp-mode 'lisp-interaction-mode) (featurep 'color-identifiers))
+                           (color-identifiers-mode)))))
+#+end_src
+*** Undo tree
+#+begin_src emacs-lisp
+  (use-package undo-tree :straight t
+    :custom
+    (undo-tree-history-directory-alist '(("." . "~/.config/emacs/undo")))
+    (undo-tree-visualizer-diff t)
+    :bind ( :map text-mode-map
+            ("C-x u" . undo-tree-visualize))
+    :hook (text-mode . undo-tree-mode))
+#+end_src
+*** Avy
+#+begin_src emacs-lisp
+  (use-package avy :straight t
+    :bind (:map global-map
+                ("H-f" . avy-goto-char-timer)
+                ("H-l" . avy-goto-line)
+                ("H-g" . avy-goto-char)
+                ("H-h" . avy-goto-char-2)))
+#+end_src
+*** Easy-kill
+#+begin_src emacs-lisp
+  (use-package easy-kill :straight t
+    :bind (:map global-map
+                ("H-w" . easy-mark)))
+#+end_src
+*** Eglot
+#+begin_src emacs-lisp
+  (use-package eglot
+    :commands (eglot eglot-ensure)
+    :custom
+    (eglot-autoshutdown t)
+    (eglot-sync-connect nil))
+#+end_src
+** Programming language modes
+*** Lua
+#+begin_src emacs-lisp
+  (use-package lua-mode :straight t
+    :hook (lua-mode . #'eglot-ensure))
+#+end_src

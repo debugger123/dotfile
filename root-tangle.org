@@ -1,0 +1,103 @@
+#+title: Files to be tangled as root
+
+* Desktop file for lxdm
+#+begin_src conf :tangle /su::/usr/share/xsessions/exwm.desktop :mkdirp yes
+  [Desktop Entry]
+  Name=Emacs
+  Comment=Emacs as a window manager
+  Exec=/opt/exwm.sh
+  TryExec=sh
+  Type=Application
+  DesktopNames=exwm
+#+end_src
+* Setup executable tangling
+Shell scripts should be marked executable after we tangle them.
+#+begin_src emacs-lisp :tangle ./setup.el
+  (defvar tmp/files-to-plus-x '("/su::/opt/exwm.sh")
+      "List of files to be made executable after tangling.")
+
+  (defun tmp/tangle-hook-plus-x ()
+    "Make files in `tmp/files-to-plus-x` executable."
+    (message "Checking executable files...")
+    (dolist (file tmp/files-to-plus-x)
+      (message "Checking file: %s" file)
+      (when (file-exists-p file)
+        (chmod file #o755)
+        (message "Made %s executable" file))))
+
+  (add-hook 'org-babel-post-tangle-hook 'tmp/tangle-hook-plus-x)
+
+  (message "Successfully evaluated")
+#+end_src
+
+#+begin_src shell :tangle /su::/opt/exwm.sh :mkdirp yes
+  #!/bin/sh
+  setxkbmap ee
+  xmodmap ~/.Xmodmap
+  export _JAVA_AWT_WM_NONREPARENTING=1
+  export EXWM=true
+  emacs -mm --internal-border=0 --border-width=0 --debug-init
+#+end_src
+* LXDM
+#+begin_src conf :tangle /su::/etc/lxdm/lxdm.conf :mkdirp yes
+  [base]
+  ## uncomment and set autologin username to enable autologin
+  #autologin=vm
+
+  ## uncomment and set timeout to enable timeout autologin,
+  ## the value should >=5
+  # timeout=10
+
+  ## default session or desktop used when no systemwide config
+  session=/usr/bin/sh /opt/exwm.sh
+  ## uncomment and set to set numlock on your keyboard
+  numlock=1
+
+  ## set this if you don't want to put xauth file at ~/.Xauthority
+  # xauth_path=/tmp
+
+  # not ask password for users who have empty password
+  # skip_password=1
+
+  ## greeter used to welcome the user
+  greeter=/usr/lib/lxdm/lxdm-greeter-gtk
+
+  [server]
+  ## arg used to start xserver, not fully function
+  # arg=/usr/bin/X -background vt1
+  # uncomment this if you really want xserver listen to tcp
+  # tcp_listen=1
+
+  [display]
+  ## gtk theme used by greeter
+  # gtk_theme=Materia-dark-compact
+
+  ## background of the greeter
+  #bg=/usr/share/backgrounds/default.png
+  # bg=/usr/share/images/desktop-base/login-background.svg
+
+  ## if show bottom pane
+  bottom_pane=1
+
+  ## if show language select control
+  lang=0
+
+  ## if show keyboard layout select control
+  keyboard=0
+
+  ## the theme of greeter
+  # theme=Materia-dark-compact
+
+  [input]
+
+  [userlist]
+  ## if disable the user list control at greeter
+  disable=0
+
+  ## whitelist user
+  white=
+
+  ## blacklist user
+  black=
+
+#+end_src
