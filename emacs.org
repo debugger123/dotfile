@@ -371,6 +371,7 @@
 ** Org mode
 #+begin_src emacs-lisp
   (use-package org :straight t :defer t
+    :hook (org-mode . org-indent-mode)
     :custom
     (org-adapt-indentation nil)
     (org-catch-invisible-edits 'show)
@@ -496,25 +497,25 @@ Allocates workspaces to monitors if exwm is used.
       (setq ediff-window-setup-function 'ediff-setup-windows-plain)
 
       ;; not optimal, from https://github.com/minad/corfu/issues/235
-      (define-advice corfu--make-frame (:around (fn frame x y w h b) exwm)
-        (if (bound-and-true-p exwm--connection)
-            (prog1
-                (let ((inhibit-redisplay t)
-                      (geo (frame-monitor-geometry exwm-workspace--current)))
-                  ;; When we're positioning the corfu frame, make it relative
-                  ;; to the current monitor. The info frame will position
-                  ;; itself relative to corfu.
-                  (when (eq frame corfu--frame)
-                    (setq x (+ x (car geo))
-                          y (+ y (cadr geo))))
-                  ;; Make sure corfu can see a parent frame, even if we've
-                  ;; removed it.
-                  (cl-letf (((symbol-function #'frame-parent)
-                             (lambda (frame)
-                               (or (frame-parameter frame 'parent-frame)
-                                   exwm-workspace--current))))
-                    (funcall fn frame x y w h b))))
-          (funcall fn frame x y w h b)))
+      ;; (define-advice corfu--make-frame (:around (fn frame x y w h b) exwm)
+      ;;   (if (bound-and-true-p exwm--connection)
+      ;;       (prog1
+      ;;           (let ((inhibit-redisplay t)
+      ;;                 (geo (frame-monitor-geometry exwm-workspace--current)))
+      ;;             ;; When we're positioning the corfu frame, make it relative
+      ;;             ;; to the current monitor. The info frame will position
+      ;;             ;; itself relative to corfu.
+      ;;             (when (eq frame corfu--frame)
+      ;;               (setq x (+ x (car geo))
+      ;;                     y (+ y (cadr geo))))
+      ;;             ;; Make sure corfu can see a parent frame, even if we've
+      ;;             ;; removed it.
+      ;;             (cl-letf (((symbol-function #'frame-parent)
+      ;;                        (lambda (frame)
+      ;;                          (or (frame-parameter frame 'parent-frame)
+      ;;                              exwm-workspace--current))))
+      ;;               (funcall fn frame x y w h b))))
+      ;;     (funcall fn frame x y w h b)))
 
       (dotns/run-silently "unclutter -idle 5")
       (dotns/run-silently "lxpolkit"))

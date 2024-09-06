@@ -5,40 +5,143 @@ I run emacs as my desktop enviornment, if you want to replicate it, it's easiest
 
 The OS I'm using as base is Debian 12. Reason behind it is stability - I never want my environment to break unless I explicitly break it myself. No update should cause me loss of productivity or extra work just to make my computer usable again. It probably works out of the box on other debian-based distributions, such as ubuntu as well, but I haven't bothered to try. Debian stable's apt repo has an ancient version of emacs (and it's probably not built the way I want anyway), so, I simply build my own.
 
-* Core components
+* Introduction
+** What I use?
 - emacs
 - xmodmap
 - linux
 - xorg
+- unclutter (for hiding the mouse cursor, I find it annoying sometimes)
+- flameshot (for taking screenshots, one of the few reasons I use the mouse for)
+** How to set up
+For quick setup, I make sure that the shell scripts are tangled to the same version of the readme. The first one should be run as root user, and the second one as regular user, as it touches the user's home directory.
 
-I'll do my best to keep the generic components separate from highly opinionated and very optional components. This is for my own convenience, as I don't use SDR things, gaming etc on every computer I have, so the base setup does not include such things.
-File names start with a number, this is the step order. If it's immediately followed by =-asroot=, such as =1-asroot-base-deps.sh=, it means it should be run as root. Otherwise it should be run as the user.
+If you already have emacs set up the way you want it to be, I aim to make it easy to use straight in your emacs - you can ignore the shell scripts, and browse the .org files, picking whatever you want from there.
 
-You may want to edit root-tangle.org in the LXDM section, if you want to log in to emacs automatically.
-
-* Base dependencies
-Installs various things needed to build emacs, and use it as my window manager.
-#+begin_src shell :tangle ./1-asroot-base-deps.sh
+You may want to edit LXDM config in the LXDM section, if you want to log in to emacs automatically. It's set to username "vm", because that's what I generally use when making sure it gets set up ptoperly in a VM.
+* Post-install manual steps
+These are high priority on my todo list, but not critical, so, they might not be the next things I do. If I get a good idea how to do it, or it bothers me enough, I'll clean it up.
+** Multi-monitor
+If you don't do anything after the setup, corfu has a bug with exwm, which makes the popup appear in an incorrect place. [[https://github.com/minad/corfu/issues/235]["My" solution]] (it's not actually mine) isn't very nice, but it works without any obvious issues so far. You need to uncomment the lines in the exwm-init-hook under the Init -> Window management (Xorg) -> EXWM, and then follow the link with a "[[https://github.com/minad/corfu/compare/exwm-fix][quick attempt]]" to fix the issue, and make this change in your local copy of exwm. It's annoying to have to remember to re-apply after updating corfu. Should make a proper fix for it, but I haven't got around to it.
+** Optional components
+*** autorandr
+i only want it on some devices. Statically set up desktop machines do not need it, perhaps I can make a checklist of components to be installed before it even starts downloading anything? I have already hooked it up, it's just a matter of installing it, and saving the desired profiles.
+*** pavucontrol
+I don't use multiple audio devices on many machines. Usually there's either 1 available output device, or none at all, which works fine out the the box without any fiddling.
+* To be run as root
+:PROPERTIES:
+:header-args: :tangle ./1-asroot.sh
+:END:
+** Terminal utilities
+Also including screenshot tool here
+#+begin_src shell
   apt install -y git wget xorg xz-utils build-essential unclutter flameshot xsettingsd
-
-  # some fonts and a theme
+#+end_src
+** Fonts & theme
+#+begin_src shell
   apt install -y fonts-liberation2 fonts-dejavu materia-gtk-theme
-
-  # for emacs build
+#+end_src
+** Emacs build deps
+#+begin_src shell
   apt install -y xorg-dev libjansson-dev libtree-sitter-dev libmagickwand-dev libgtk-3-dev libwebkit2gtk-4.0-dev libgnutls28-dev libsystemd-dev libgif-dev libncurses-dev texinfo libgccjit-12-dev libm17n-dev libotf-dev libxft-dev
-
-  # login manager & gui app root access
+#+end_src
+** LXDM
+#+begin_src shell
   apt install -y lxpolkit lxdm
+#+end_src
+*** LXDM config
+#+begin_src conf :tangle /su::/etc/lxdm/lxdm.conf :mkdirp yes
+  [base]
+  ## uncomment and set autologin username to enable autologin
+  #autologin=vm
 
-  # for firefox
+  ## uncomment and set timeout to enable timeout autologin,
+  ## the value should >=5
+  # timeout=10
+
+  ## default session or desktop used when no systemwide config
+  session=/usr/bin/sh /opt/exwm.sh
+  ## uncomment and set to set numlock on your keyboard
+  numlock=1
+
+  ## set this if you don't want to put xauth file at ~/.Xauthority
+  # xauth_path=/tmp
+
+  # not ask password for users who have empty password
+  # skip_password=1
+
+  ## greeter used to welcome the user
+  greeter=/usr/lib/lxdm/lxdm-greeter-gtk
+
+  [server]
+  ## arg used to start xserver, not fully function
+  # arg=/usr/bin/X -background vt1
+  # uncomment this if you really want xserver listen to tcp
+  # tcp_listen=1
+
+  [display]
+  ## gtk theme used by greeter
+  # gtk_theme=Materia-dark-compact
+
+  ## background of the greeter
+  #bg=/usr/share/backgrounds/default.png
+  # bg=/usr/share/images/desktop-base/login-background.svg
+
+  ## if show bottom pane
+  bottom_pane=1
+
+  ## if show language select control
+  lang=0
+
+  ## if show keyboard layout select control
+  keyboard=0
+
+  ## the theme of greeter
+  # theme=Materia-dark-compact
+
+  [input]
+
+  [userlist]
+  ## if disable the user list control at greeter
+  disable=0
+
+  ## whitelist user
+  white=
+
+  ## blacklist user
+  black=
+
+#+end_src
+*** Desktop file for lxdm
+#+begin_src conf :tangle /su::/usr/share/xsessions/exwm.desktop :mkdirp yes
+  [Desktop Entry]
+  Name=Emacs
+  Comment=Emacs as a window manager
+  Exec=/opt/exwm.sh
+  TryExec=sh
+  Type=Application
+  DesktopNames=exwm
+#+end_src
+*** Shell script to start emacs with EXWM enabled
+#+begin_src shell :tangle /su::/opt/exwm.sh :mkdirp yes
+  #!/bin/sh
+  setxkbmap ee
+  xmodmap ~/.Xmodmap
+  export _JAVA_AWT_WM_NONREPARENTING=1
+  export EXWM=true
+  emacs -mm --internal-border=0 --border-width=0 --debug-init
+#+end_src
+** Firefox
+#+begin_src shell
   wget -q https://packages.mozilla.org/apt/repo-signing-key.gpg -O- | tee /etc/apt/keyrings/packages.mozilla.org.asc > /dev/null
   gpg -n -q --import --import-options import-show /etc/apt/keyrings/packages.mozilla.org.asc | awk '/pub/{getline; gsub(/^ +| +$/,""); print "\n"$0"\n"}'
   echo "deb [signed-by=/etc/apt/keyrings/packages.mozilla.org.asc] https://packages.mozilla.org/apt mozilla main" | sudo tee -a /etc/apt/sources.list.d/mozilla.list > /dev/null
   apt update
   apt install firefox
 #+end_src
-* Build emacs
-#+begin_src shell :tangle ./2-build-emacs.sh
+** Build & install emacs
+It's not nice to build as root. This is a potential vulnerability, but it saves me 2 scripts.
+#+begin_src shell
   mkdir build
   cd build
   wget http://ftp.gnu.org/gnu/emacs/emacs-29.4.tar.xz
@@ -46,17 +149,13 @@ Installs various things needed to build emacs, and use it as my window manager.
   cd emacs-29.4
   ./configure --with-wide-int --with-modules --with-native-compilation=aot --with-json --with-tree-sitter --with-gif --with-png --with-jpeg --with-rsvg --with-tiff --with-imagemagick --with-xwidgets CFLAGS="-O2 -pipe -mtune=native -march=native -fomit-frame-pointer"
   make -j $(nproc)
-#+end_src
-* Install emacs
-Separate step only because I don't make myself a sudoer. I'm sure there's a way better way to handle this, I haven't been arsed yet.
-#+begin_src shell :tangle ./3-asroot-install-emacs.sh
-  cd build/emacs-29.4
   make install
 #+end_src
 * Post-install
 Tangle org files, and set the executable permission for /opt/exwm.sh
-#+begin_src shell :tangle ./4-post-install.sh
-  emacs --batch --eval "(progn (require 'org) (org-babel-tangle-file \"emacs.org\") (org-babel-tangle-file \"root-tangle.org\") (load-file \"setup.el\") (org-babel-tangle-file \"root-tangle.org\"))"
+If tangling manually, remember to load setup.el before tangling.
+#+begin_src shell :tangle ./2-emacs.sh
+  emacs --batch --eval "(progn (require 'org) (org-babel-tangle-file \"emacs.org\") (load-file \"setup.el\") (org-babel-tangle-file \"emacs.org\"))"
 #+end_src
 * Xmodmap
 #+begin_src conf :tangle ~/.Xmodmap :mkdirp yes
@@ -66,3 +165,29 @@ Tangle org files, and set the executable permission for /opt/exwm.sh
 
   keycode 66 = Hyper_L
 #+end_src
+* Setup executable tangling
+Shell scripts should be marked executable after we tangle them.
+#+begin_src emacs-lisp :tangle ./setup.el
+  (defvar tmp/files-to-plus-x '("/su::/opt/exwm.sh")
+      "List of files to be made executable after tangling.")
+
+  (defun tmp/tangle-hook-plus-x ()
+    "Make files in `tmp/files-to-plus-x` executable."
+    (message "Checking executable files...")
+    (dolist (file tmp/files-to-plus-x)
+      (message "Checking file: %s" file)
+      (when (file-exists-p file)
+        (chmod file #o755)
+        (message "Made %s executable" file))))
+
+  (add-hook 'org-babel-post-tangle-hook 'tmp/tangle-hook-plus-x)
+
+  (message "Successfully evaluated")
+#+end_src
+* Definitely todo
+- An easy way to select optional components to install
+  - While at it, select whether to autologin as well
+  - Prompting should be done before any of the processes are kicked off
+- Different browsers
+  - I usually install more than 1 browser on my system, specially when it's a machine I perform my work duties on. If one fails me, I don't have to debug it right there on the spot, I can just grab next browser for a while.
+- Either fix the corfu issue, or make a patch that can be installed via straight somehow, or fork corfu. Figure something out, this manual step is a bit annoying
