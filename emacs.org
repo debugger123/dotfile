@@ -619,6 +619,9 @@ Allocates workspaces to monitors if exwm is used.
       (dotns/run-silently "xset s off")
       (dotns/run-silently "xset -dpms")
 
+      (when (executable-find "picom")
+        (dotns/run-silently "picom"))
+
       (exwm-enable)
 
       (require 'exwm-randr)
@@ -669,7 +672,7 @@ Some applications, such as vmware horizon client, read their theme-related setti
       (gsettings-set-from-gvariant-string "org.gnome.desktop.wm.preferences" "theme" (exwm-xsettings--pick-theme exwm-xsettings-theme))
       (gsettings-set-from-gvariant-string "org.gnome.desktop.interface" "color-scheme" (if (equal (exwm-xsettings--pick-theme exwm-xsettings-theme) dotns/gtk-theme--light)
                                                                                            "prefer-light" "prefer-dark")))
-    (use-package gsettings :straight t :defer t
+    (use-package gsettings :straight t
       :config
       (add-hook 'modus-themes-after-load-theme-hook #'dotns/gsettings-update-theme)
       (dotns/gsettings-update-theme)
@@ -912,4 +915,10 @@ Some applications, such as vmware horizon client, read their theme-related setti
 #+begin_src emacs-lisp
   (use-package lua-mode :straight t
     :hook (lua-mode . #'eglot-ensure))
+#+end_src
+*** Typescript
+#+begin_src emacs-lisp
+  (add-hook 'typescript-ts-mode-hook #'eglot-ensure)
+  (add-to-list 'auto-mode-alist '("\\.ts\\'" . typescript-ts-mode))
+  (setq typescript-ts-mode-indent-offset 4)
 #+end_src
