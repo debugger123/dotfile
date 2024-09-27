@@ -531,6 +531,8 @@ Allocates workspaces to monitors if exwm is used.
       :straight t
       :custom
       (exwm-workspace-number 10)
+      ;; (exwm-workspace-minibuffer-position 'bottom)
+      ;; (exwm-workspace-display-echo-area-timeout 3)
 
       (exwm-input-prefix-keys
        '(?\M-x ?\M-:
@@ -685,7 +687,7 @@ Some applications, such as vmware horizon client, read their theme-related setti
 #+begin_src emacs-lisp
   (use-package corfu :straight t
     :config (setq corfu-auto t
-                  corfu-auto-delay 0
+                  corfu-auto-delay 0.1
                   corfu-min-width 20
                   corfu-auto-prefix 1
                   corfu-preview-current t
@@ -906,15 +908,37 @@ Some applications, such as vmware horizon client, read their theme-related setti
 #+begin_src emacs-lisp
   (use-package eglot
     :commands (eglot eglot-ensure)
+    :bind (:map eglot-mode-map
+                ("H-e r" . eglot-rename)
+                ("H-e f" . eglot-format))
     :custom
     (eglot-autoshutdown t)
-    (eglot-sync-connect nil))
+    (eglot-sync-connect nil)
+    :config
+    (setq eldoc-echo-area-use-multiline-p nil))
+#+end_src
+** OS utils
+*** Apt
+#+begin_src emacs-lisp
+  (when (executable-find "apt")
+    (use-package apt-mode :straight t
+      :commands apt)
+
+    (use-package apt-sources-list :straight t))
+#+end_src
+*** Journalctl
+#+begin_src emacs-lisp
+  (when (executable-find "journalctl")
+    (use-package journalctl-mode :straight t
+      :commands journalctl))
 #+end_src
 ** Programming language modes
 *** Lua
 #+begin_src emacs-lisp
   (use-package lua-mode :straight t
-    :hook (lua-mode . #'eglot-ensure))
+    :config
+    (setq lua-indent-level 4)
+    (add-hook 'lua-mode-hook #'eglot-ensure))
 #+end_src
 *** Typescript
 #+begin_src emacs-lisp
