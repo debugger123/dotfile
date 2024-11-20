@@ -16,7 +16,7 @@
         inhibit-startup-echo-area-message t
         inhibit-startup-buffer-menu t
         org-modules nil
-        initial-major-mode 'fundamental-mode)
+        initial-major-mode 'emacs-lisp-mode)
 
   (menu-bar-mode -1)
   (tool-bar-mode -1)
@@ -225,9 +225,9 @@
   (defun dotns/modeline--color-hook ()
     (modus-themes-with-colors
       (custom-set-faces
-       `(mode-line ((t :background ,bg-main :box nil))))
+       `(mode-line ((t :background ,bg-active-accent :box nil))))
       (custom-set-faces
-       `(mode-line-inactive ((t :background ,bg-alt :box nil))))))
+       `(mode-line-inactive ((t :background ,bg-inactive :box nil))))))
 
   (dotns/modeline--color-hook)
   (add-hook 'modus-themes-after-load-theme-hook #'dotns/modeline--color-hook)
@@ -350,9 +350,9 @@
     (setq wdired-allow-to-change-permissions t
           wdired-create-parent-directories t))
 
-  (use-package all-the-icons-dired :straight t
+  (use-package nerd-icons-dired :straight t
     :after dired
-    :hook (dired-mode . all-the-icons-dired-mode))
+    :hook (dired-mode . nerd-icons-dired-mode))
 
   (use-package dired-open :straight t
     :after dired
@@ -451,8 +451,8 @@ Allocates workspaces to monitors if exwm is used.
     (defvar dotns/screen--workspace-configs '((2 . ((1 . (1 2 3 4 5))))
                                               (3 . ((1 . (1 2 3))
                                                     (2 . (4 5 6))))
-                                              (4 . ((1 . (1 2 3))
-                                                    (2 . (4 5))
+                                              (4 . ((1 . (1 2))
+                                                    (2 . (3 4 5))
                                                     (3 . (6 7)))))
       "Workspace to display mappings")
 
@@ -476,7 +476,7 @@ Allocates workspaces to monitors if exwm is used.
 
     (defun dotns/exwm-screens-changed ()
       (when (executable-find "autorandr")
-        (dotns/run-silently "autorandr -c"))
+        (dotns/run-silently "autorandr -c --force"))
       (let ((screens (dotns/get-screens)))
         (when (length> screens 1)
           (setq exwm-randr-workspace-monitor-plist (dotns/screen--to-plist (car screens) screens))))
@@ -496,29 +496,18 @@ Allocates workspaces to monitors if exwm is used.
     (defun dotns/exwm-init-hook ()
       (setq ediff-window-setup-function 'ediff-setup-windows-plain)
 
-      ;; not optimal, from https://github.com/minad/corfu/issues/235
-      ;; (define-advice corfu--make-frame (:around (fn frame x y w h b) exwm)
-      ;;   (if (bound-and-true-p exwm--connection)
-      ;;       (prog1
-      ;;           (let ((inhibit-redisplay t)
-      ;;                 (geo (frame-monitor-geometry exwm-workspace--current)))
-      ;;             ;; When we're positioning the corfu frame, make it relative
-      ;;             ;; to the current monitor. The info frame will position
-      ;;             ;; itself relative to corfu.
-      ;;             (when (eq frame corfu--frame)
-      ;;               (setq x (+ x (car geo))
-      ;;                     y (+ y (cadr geo))))
-      ;;             ;; Make sure corfu can see a parent frame, even if we've
-      ;;             ;; removed it.
-      ;;             (cl-letf (((symbol-function #'frame-parent)
-      ;;                        (lambda (frame)
-      ;;                          (or (frame-parameter frame 'parent-frame)
-      ;;                              exwm-workspace--current))))
-      ;;               (funcall fn frame x y w h b))))
-      ;;     (funcall fn frame x y w h b)))
-
       (dotns/run-silently "unclutter -idle 5")
       (dotns/run-silently "lxpolkit"))
+
+    (defun dotns/run-silently-split-below (cmd)
+      (dotns/run-silently cmd)
+      (split-window-below)
+      (windmove-down))
+
+    (defun dotns/run-silently-split-right (cmd)
+      (dotns/run-silently cmd)
+      (split-window-below)
+      (windmove-down))
 
     ;; exwm-occupied windows survive kill-buffer-and-window, the X window gets killed though
     (defun dotns/kill-buffer-and-window ()
@@ -557,6 +546,7 @@ Allocates workspaces to monitors if exwm is used.
          ([?\C-d] . [delete])
          ([?\C-k] . [S-end delete])))
 
+      ;; Keys that work in xorg buffers in line mode, in addition to emacs buffers
       (exwm-input-global-keys
        `(([?\s-r] . exwm-reset)
          ([?\s-q] . dotns/kill-buffer-and-window)
@@ -591,7 +581,9 @@ Allocates workspaces to monitors if exwm is used.
 
          ([?\s-&] . (lambda (command)
                       (interactive (list (read-shell-command "$ ")))
-                      (dotns/run-silently command)))
+                      (cond ((eq current-prefix-arg 2) (dotns/run-silently-split-below command))
+                            ((eq current-prefix-arg 3) (dotns/run-silently-split-right command))
+                            (t (dotns/run-silently command)))))
 
          ,@(mapcar (lambda (i)
                      `(,(kbd (format "s-%d" i)) .
@@ -623,6 +615,9 @@ Allocates workspaces to monitors if exwm is used.
 
       (when (executable-find "picom")
         (dotns/run-silently "picom"))
+
+      (when (executable-find "nm-tray")
+        (dotns/run-silently "nm-tray"))
 
       (exwm-enable)
 
@@ -694,10 +689,52 @@ Some applications, such as vmware horizon client, read their theme-related setti
                   corfu-echo-delay 0.1
                   corfu-quit-no-match 'separator)
     (global-corfu-mode)
-    (add-hook 'corfu-mode-hook 'corfu-echo-mode))
+    (add-hook 'corfu-mode-hook 'corfu-echo-mode)
+    (add-hook 'eshell-mode-hook (lambda () (setq-local corfu-auto nil))))
 
   (use-package nerd-icons-corfu :straight t
     :config (add-to-list 'corfu-margin-formatters #'nerd-icons-corfu-formatter))
+
+  ;; pcomplete git commands
+  (defconst pcmpl-git-commands
+    '("add" "bisect" "branch" "checkout" "clone"
+      "commit" "diff" "fetch" "grep"
+      "init" "log" "merge" "mv" "pull" "push" "rebase"
+      "reset" "rm" "show" "status" "tag" )
+    "List of `git' commands.")
+
+  (defvar pcmpl-git-ref-list-cmd "git for-each-ref refs/ --format='%(refname)'"
+    "The `git' command to run to get a list of refs.")
+
+  (defun pcmpl-git-get-refs (type)
+    "Return a list of `git' refs filtered by TYPE."
+    (with-temp-buffer
+      (insert (shell-command-to-string pcmpl-git-ref-list-cmd))
+      (goto-char (point-min))
+      (let ((ref-list))
+        (while (re-search-forward (concat "^refs/" type "/\\(.+\\)$") nil t)
+          (add-to-list 'ref-list (match-string 1)))
+        ref-list)))
+
+  (defun pcomplete/git ()
+    "Completion for `git'."
+    ;; Completion for the command argument.
+    (pcomplete-here* pcmpl-git-commands)
+    ;; complete files/dirs forever if the command is `add' or `rm'
+    (cond
+     ((pcomplete-match (regexp-opt '("add" "rm")) 1)
+      (while (pcomplete-here (pcomplete-entries))))
+     ;; provide branch completion for the command `checkout'.
+     ((pcomplete-match "checkout" 1)
+      (pcomplete-here* (pcmpl-git-get-refs "heads")))))
+#+end_src
+*** Tempel
+#+begin_src emacs-lisp
+  (use-package tempel :straight t
+    :bind (("M-+" . tempel-complete)))
+
+  (use-package tempel-collection :straight t
+    :after tempel)
 #+end_src
 *** Vertico
 #+begin_src emacs-lisp
@@ -898,11 +935,28 @@ Some applications, such as vmware horizon client, read their theme-related setti
                 ("H-g" . avy-goto-char)
                 ("H-h" . avy-goto-char-2)))
 #+end_src
+*** Yafolding
+#+begin_src emacs-lisp
+  (use-package yafolding :straight t
+    :hook ((prog-mode . yafolding-mode)))
+#+end_src
+*** Markdown
+#+begin_src emacs-lisp
+  (use-package markdown-mode :straight t
+    :config
+    (add-to-list 'auto-mode-alist '("\\.md\\'" . markdown-view-mode)))
+#+end_src
 *** Easy-kill
 #+begin_src emacs-lisp
   (use-package easy-kill :straight t
     :bind (:map global-map
                 ("H-w" . easy-mark)))
+#+end_src
+*** Multifiles
+#+begin_src emacs-lisp
+  (use-package multifiles :straight t
+    :bind (:map global-map
+                ("H-a" . mf/mirror-region-in-multifile)))
 #+end_src
 *** Eglot
 #+begin_src emacs-lisp
@@ -916,6 +970,16 @@ Some applications, such as vmware horizon client, read their theme-related setti
     (eglot-sync-connect nil)
     :config
     (setq eldoc-echo-area-use-multiline-p nil))
+#+end_src
+*** Clang-format
+#+begin_src emacs-lisp
+  (use-package clang-format :straight t)
+#+end_src
+** PDF viewing
+#+begin_src emacs-lisp
+  (use-package pdf-tools :straight t
+    :config
+    (pdf-tools-install))
 #+end_src
 ** OS utils
 *** Apt
@@ -943,6 +1007,21 @@ Some applications, such as vmware horizon client, read their theme-related setti
 *** Typescript
 #+begin_src emacs-lisp
   (add-hook 'typescript-ts-mode-hook #'eglot-ensure)
+  (add-hook 'tsx-mode-hook #'eglot-ensure)
+  (add-to-list 'auto-mode-alist '("\\.tsx\\'" . tsx-ts-mode))
   (add-to-list 'auto-mode-alist '("\\.ts\\'" . typescript-ts-mode))
   (setq typescript-ts-mode-indent-offset 4)
+#+end_src
+*** Rust
+#+begin_src emacs-lisp
+  (add-hook 'rust-ts-mode-hook #'eglot-ensure)
+  (add-to-list 'auto-mode-alist '("\\.rs\\'" . rust-ts-mode))
+
+  (use-package eglot-x :straight (eglot-x :type git :flavor master :host github :repo "nemethf/eglot-x"))
+#+end_src
+** Load machine-specific configs
+#+begin_src emacs-lisp
+  (when (f-exists-p "~/.config/emacs/machine-specific/")
+    (dolist (lispfile (directory-files-recursively "~/.config/emacs/machine-specific/" "\\.el$"))
+      (load-file lispfile)))
 #+end_src

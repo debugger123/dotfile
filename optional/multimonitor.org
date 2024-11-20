@@ -1,0 +1,25 @@
+* Corfu hack
+Corfu doesn't play nice with exwm when there's more than 1 display in use. Apply the hack from [[https://github.com/minad/corfu/issues/235][https://github.com/minad/corfu/issues/235]], and then tangle this file
+** Advice to run on startup
+#+begin_src emacs-lisp :tangle ~/.config/emacs/machine-specific/corfu-hack.el
+  (when (equal (getenv "EXWM") "true")
+    (define-advice corfu--make-frame (:around (fn frame x y w h b) exwm)
+      (if (bound-and-true-p exwm--connection)
+          (prog1
+              (let ((inhibit-redisplay t)
+                    (geo (frame-monitor-geometry exwm-workspace--current)))
+                ;; When we're positioning the corfu frame, make it relative
+                ;; to the current monitor. The info frame will position
+                ;; itself relative to corfu.
+                (when (eq frame corfu--frame)
+                  (setq x (+ x (car geo))
+                        y (+ y (cadr geo))))
+                ;; Make sure corfu can see a parent frame, even if we've
+                ;; removed it.
+                (cl-letf (((symbol-function #'frame-parent)
+                           (lambda (frame)
+                             (or (frame-parameter frame 'parent-frame)
+                                 exwm-workspace--current))))
+                  (funcall fn frame x y w h b))))
+        (funcall fn frame x y w h b))))
+#+end_src

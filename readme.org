@@ -35,7 +35,7 @@ I don't use multiple audio devices on many machines. Usually there's either 1 av
 ** Terminal utilities
 Also including screenshot tool here
 #+begin_src shell
-  apt install -y git wget xorg xz-utils build-essential unclutter flameshot xsettingsd
+  apt install -y git wget xorg xz-utils build-essential unclutter flameshot xsettingsd cmake
 #+end_src
 ** Fonts & theme
 #+begin_src shell
@@ -131,14 +131,6 @@ Also including screenshot tool here
   export EXWM=true
   emacs -mm --internal-border=0 --border-width=0 --debug-init
 #+end_src
-** Firefox
-#+begin_src shell
-  wget -q https://packages.mozilla.org/apt/repo-signing-key.gpg -O- | tee /etc/apt/keyrings/packages.mozilla.org.asc > /dev/null
-  gpg -n -q --import --import-options import-show /etc/apt/keyrings/packages.mozilla.org.asc | awk '/pub/{getline; gsub(/^ +| +$/,""); print "\n"$0"\n"}'
-  echo "deb [signed-by=/etc/apt/keyrings/packages.mozilla.org.asc] https://packages.mozilla.org/apt mozilla main" | sudo tee -a /etc/apt/sources.list.d/mozilla.list > /dev/null
-  apt update
-  apt install firefox
-#+end_src
 ** Build & install emacs
 It's not nice to build as root. This is a potential vulnerability, but it saves me 2 scripts.
 #+begin_src shell
@@ -155,7 +147,8 @@ It's not nice to build as root. This is a potential vulnerability, but it saves 
 Tangle org files, and set the executable permission for /opt/exwm.sh
 If tangling manually, remember to load setup.el before tangling.
 #+begin_src shell :tangle ./2-emacs.sh
-  emacs --batch --eval "(progn (require 'org) (org-babel-tangle-file \"emacs.org\") (load-file \"setup.el\") (org-babel-tangle-file \"emacs.org\"))"
+  emacs --batch --eval "(progn (require 'org) (org-babel-tangle-file \"emacs.org\"))"
+  emacs --batch --eval "(progn (require 'org) (load-file \"setup.el\") (org-babel-tangle-file \"emacs.org\"))"
 #+end_src
 * Xmodmap
 #+begin_src conf :tangle ~/.Xmodmap :mkdirp yes
