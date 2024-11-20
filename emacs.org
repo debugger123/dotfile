@@ -321,7 +321,8 @@
 #+end_src
 ** Git timemachine
 #+begin_src emacs-lisp
-  (use-package git-timemachine :straight t)
+  (use-package git-timemachine :straight t
+    :commands (git-timemachine))
 #+end_src
 ** Dired
 #+begin_src emacs-lisp
@@ -1021,7 +1022,7 @@ Some applications, such as vmware horizon client, read their theme-related setti
 #+end_src
 ** Load machine-specific configs
 #+begin_src emacs-lisp
-  (when (f-exists-p "~/.config/emacs/machine-specific/")
+  (when (file-exists-p "~/.config/emacs/machine-specific/")
     (dolist (lispfile (directory-files-recursively "~/.config/emacs/machine-specific/" "\\.el$"))
       (load-file lispfile)))
 #+end_src
