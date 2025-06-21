@@ -65,10 +65,14 @@
 #+end_src
 ** Emacs settings and built-in global modes
 #+begin_src emacs-lisp
-  (setq visible-bell t)
-  (setq use-short-answers t)
+  (setq visible-bell t
+        use-short-answers t)
   (delete-selection-mode 1)
-  (setq custom-file (make-temp-file "emacs-custom-"))
+  (setq custom-file (make-temp-file "emacs-custom-")
+        backup-directory-alist '(("." . "~/.config/emacs/autosaves"))
+        kept-new-versions 6
+        kept-old-versions 2
+        version-control t)
 
   (global-auto-revert-mode 1)
   (global-hl-line-mode 1)
@@ -85,6 +89,8 @@
 
   (setq isearch-lazy-count t
         isearch-repeat-on-direction-change t)
+
+  (setq large-file-warning-threshold nil)
 
   (setq list-matching-lines-jump-to-current-line t)
 
@@ -247,6 +253,7 @@
           term-mode-hook
           shell-mode-hook
           treemacs-mode-hook
+          pdf-view-mode-hook
           eshell-mode-hook))
     (add-hook mode (lambda () (display-line-numbers-mode 0))))
 
@@ -294,6 +301,7 @@
         ("H-r" . #'crux-rename-buffer-and-file)
         ("H-k" . crux-kill-whole-line)))
 
+  (global-set-key (kbd "<XF86Calculator>") (lambda () (interactive) (calculator)))
   (global-set-key (kbd "C-v") (lambda () (interactive) (next-line (ralaul/frac-window-height)) (recenter)))
   (global-set-key (kbd "M-v") (lambda () (interactive) (previous-line (ralaul/frac-window-height)) (recenter)))
 #+end_src
@@ -507,8 +515,13 @@ Allocates workspaces to monitors if exwm is used.
 
     (defun dotns/run-silently-split-right (cmd)
       (dotns/run-silently cmd)
-      (split-window-below)
-      (windmove-down))
+      (split-window-right)
+      (windmove-right))
+
+    (defun dotns/run-silently-split-on-prefix (command) ""
+           (cond ((eq current-prefix-arg 2) (dotns/run-silently-split-below command))
+                 ((eq current-prefix-arg 3) (dotns/run-silently-split-right command))
+                 (t (dotns/run-silently command))))
 
     ;; exwm-occupied windows survive kill-buffer-and-window, the X window gets killed though
     (defun dotns/kill-buffer-and-window ()
@@ -544,14 +557,18 @@ Allocates workspaces to monitors if exwm is used.
          ([?\C-e] . [end])
          ([?\M-v] . [prior])
          ([?\C-v] . [next])
+         ([?\C-s] . [C-f])
          ([?\C-d] . [delete])
+         ([?\M-d] . [C-S-right delete])
          ([?\C-k] . [S-end delete])))
 
       ;; Keys that work in xorg buffers in line mode, in addition to emacs buffers
       (exwm-input-global-keys
        `(([?\s-r] . exwm-reset)
          ([?\s-q] . dotns/kill-buffer-and-window)
+         ([?\s-k] . (lambda () "" (interactive) (kill-buffer)))
          ([?\s-w] . exwm-workspace-switch)
+         ([?\s-s] . exwm-workspace-swap)
 
          ([?\s-b] . windmove-left)
          ([?\s-f] . windmove-right)
@@ -582,9 +599,7 @@ Allocates workspaces to monitors if exwm is used.
 
          ([?\s-&] . (lambda (command)
                       (interactive (list (read-shell-command "$ ")))
-                      (cond ((eq current-prefix-arg 2) (dotns/run-silently-split-below command))
-                            ((eq current-prefix-arg 3) (dotns/run-silently-split-right command))
-                            (t (dotns/run-silently command)))))
+                      (dotns/run-silently-split-on-prefix command)))
 
          ,@(mapcar (lambda (i)
                      `(,(kbd (format "s-%d" i)) .
@@ -593,18 +608,17 @@ Allocates workspaces to monitors if exwm is used.
                          (exwm-workspace-switch-create ,i))))
                    (number-sequence 0 9))
          ,@(mapcar (lambda (i)
-                     `(,(kbd (format "C-s-%d" i)) .
-                       (lambda ()
-                         (interactive)
-                         (exwm-workspace-swap exwm-workspace-current-index ,i))))
-                   (number-sequence 0 9))
-         ,@(mapcar (lambda (i)
                      `(,(kbd (format "M-s-%d" i)) .
                        (lambda ()
                          (interactive)
                          (exwm-workspace-move-window ,i))))
                    (number-sequence 0 9))))
       :config
+
+      (global-set-key (kbd "<XF86HomePage>") (lambda () (interactive) (dotns/run-silently-split-on-prefix "firefox")))
+      (global-set-key (kbd "<XF86Explorer>") (lambda () (interactive) (dired ".")))
+      (global-set-key (kbd "<XF86Mail>") (lambda () (interactive) (dotns/run-silently-split-on-prefix "terminology")))
+      (global-set-key (kbd "<XF86Sleep>") (lambda () (interactive) (desktop-environment-lock-screen)))
 
       (add-hook 'exwm-init-hook #'dotns/exwm-init-hook)
       (add-hook 'exwm-update-class-hook #'dotns/exwm-update-buffer-name)
@@ -624,10 +638,10 @@ Allocates workspaces to monitors if exwm is used.
 
       (require 'exwm-randr)
       (add-hook 'exwm-randr-screen-change-hook #'dotns/exwm-screens-changed)
-      (exwm-randr-enable)
+      (exwm-randr-mode 1)
 
       (require 'exwm-systemtray)
-      (exwm-systemtray-enable)))
+      (exwm-systemtray-mode 1)))
 #+end_src
 *** Desktop env
 Makes basic shortcuts, like adjusting brightness, volume, taking screenshots, locking the workstation and more just work.
@@ -965,7 +979,8 @@ Some applications, such as vmware horizon client, read their theme-related setti
     :commands (eglot eglot-ensure)
     :bind (:map eglot-mode-map
                 ("H-e r" . eglot-rename)
-                ("H-e f" . eglot-format))
+                ("H-e f" . eglot-format)
+                ("H-e a" . eglot-code-actions))
     :custom
     (eglot-autoshutdown t)
     (eglot-sync-connect nil)
@@ -1011,7 +1026,7 @@ Some applications, such as vmware horizon client, read their theme-related setti
   (add-hook 'tsx-mode-hook #'eglot-ensure)
   (add-to-list 'auto-mode-alist '("\\.tsx\\'" . tsx-ts-mode))
   (add-to-list 'auto-mode-alist '("\\.ts\\'" . typescript-ts-mode))
-  (setq typescript-ts-mode-indent-offset 4)
+  (setq typescript-ts-mode-indent-offset 2)
 #+end_src
 *** Rust
 #+begin_src emacs-lisp
@@ -1019,6 +1034,20 @@ Some applications, such as vmware horizon client, read their theme-related setti
   (add-to-list 'auto-mode-alist '("\\.rs\\'" . rust-ts-mode))
 
   (use-package eglot-x :straight (eglot-x :type git :flavor master :host github :repo "nemethf/eglot-x"))
+  (use-package cargo :straight t
+    :hook (rust-mode . cargo-minor-mode))
+  (use-package rust-playground :straight t)
+#+end_src
+*** C/C++
+#+begin_src emacs-lisp
+  (defconst dotns/c-style '((c-basic-offset . 4)) "Basic c style")
+  (c-add-style "DOTNS_C_STYLE" dotns/c-style)
+  (defun dotns/c-mode-common-hook ()
+    "Hook for C mode to apply emacs style"
+    (c-set-style "DOTNS_C_STYLE"))
+  (add-hook 'c-mode-common-hook 'dotns/c-mode-common-hook)
+  (setq project-vc-extra-root-markers '(".clangd"))
+  (setq compilation-scroll-output t)
 #+end_src
 ** Load machine-specific configs
 #+begin_src emacs-lisp

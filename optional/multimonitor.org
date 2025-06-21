@@ -1,7 +1,7 @@
 * Corfu hack
 Corfu doesn't play nice with exwm when there's more than 1 display in use. Apply the hack from [[https://github.com/minad/corfu/issues/235][https://github.com/minad/corfu/issues/235]], and then tangle this file
 ** Advice to run on startup
-#+begin_src emacs-lisp :tangle ~/.config/emacs/machine-specific/corfu-hack.el
+#+begin_src emacs-lisp :tangle ~/.config/emacs/machine-specific/corfu-hack.el :mkdirp yes
   (when (equal (getenv "EXWM") "true")
     (define-advice corfu--make-frame (:around (fn frame x y w h b) exwm)
       (if (bound-and-true-p exwm--connection)

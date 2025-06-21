@@ -1,0 +1,298 @@
+Based on instructions from [[https://github.com/f4exb/sdrangel/wiki/Compile-from-source-in-Linux][their official github wiki]]
+Steps to install:
+- Review the src blocks below, pay attention which radio libs have the =:notangle= keyword in their src header.
+* Dependencies from apt
+#+begin_src shell :tangle ./generated/sdrangel-1-asroot-prepare.sh :mkdirp yes
+  apt install -y git cmake g++ pkg-config autoconf automake libtool libfftw3-dev libusb-1.0-0-dev libusb-dev libhidapi-dev libopengl-dev qtbase5-dev qtchooser libqt5multimedia5-plugins qtmultimedia5-dev libqt5websockets5-dev qttools5-dev qttools5-dev-tools libqt5opengl5-dev libqt5quick5 libqt5charts5-dev qml-module-qtlocation  qml-module-qtpositioning qml-module-qtquick-window2 qml-module-qtquick-dialogs qml-module-qtquick-controls qml-module-qtquick-controls2 qml-module-qtquick-layouts libqt5serialport5-dev qtdeclarative5-dev qtpositioning5-dev qtlocation5-dev libqt5texttospeech5-dev qtwebengine5-dev qtbase5-private-dev libqt5gamepad5-dev libqt5svg5-dev libfaad-dev libflac-dev zlib1g-dev libboost-all-dev libasound2-dev pulseaudio libopencv-dev libxml2-dev bison flex ffmpeg libavcodec-dev libavformat-dev libopus-dev doxygen graphviz
+  # Not all deps are pre-installed on empty debian
+  apt install -y libspeexdsp-dev libsamplerate0-dev libavahi-client-dev
+#+end_src
+* Manual preparation steps
+TODO: this shouldn't really be needed
+** Create and set permissions for the /opt directories needed
+#+begin_src shell :tangle ./generated/sdrangel-1-asroot-prepare.sh :mkdirp yes
+  # As root, create 2 dirs in the /opt folder
+  mkdir /opt/build
+  mkdir /opt/install
+
+  # Now make sure that your main user has R/W/X permissions for them
+  chown $USER:users /opt/build
+  chown $USER:users /opt/install
+#+end_src
+* Dependencies to be built locally
+:PROPERTIES:
+:header-args: :tangle ./generated/sdrangel-2-install.sh :mkdirp yes
+:END:
+SDRAngel uses some specific versions of some packages. As the official wiki instructs, we'll build them manually
+** APT
+#+begin_src shell
+  cd /opt/build
+  git clone https://github.com/srcejon/aptdec.git
+  cd aptdec
+  git checkout libaptdec
+  git submodule update --init --recursive
+  mkdir build; cd build
+  cmake -Wno-dev -DCMAKE_INSTALL_PREFIX=/opt/install/aptdec ..
+  make -j $(nproc) install
+#+end_src
+** CM265cc
+#+begin_src shell
+  cd /opt/build
+  git clone https://github.com/f4exb/cm256cc.git
+  cd cm256cc
+  git reset --hard 6f4a51802f5f302577d6d270a9fc0cb7a1ee28ef
+  mkdir build; cd build
+  cmake -Wno-dev -DCMAKE_INSTALL_PREFIX=/opt/install/cm256cc ..
+  make -j $(nproc) install
+#+end_src
+** libDAB
+#+begin_src shell
+  cd /opt/build
+  git clone https://github.com/srcejon/dab-cmdline
+  cd dab-cmdline/library
+  git checkout msvc
+  mkdir build; cd build
+  cmake -Wno-dev -DCMAKE_INSTALL_PREFIX=/opt/install/libdab ..
+  make -j $(nproc) install
+#+end_src
+** MBElib
+#+begin_src shell
+  cd /opt/build
+  git clone https://github.com/szechyjs/mbelib.git
+  cd mbelib
+  git reset --hard 9a04ed5c78176a9965f3d43f7aa1b1f5330e771f
+  mkdir build; cd build
+  cmake -Wno-dev -DCMAKE_INSTALL_PREFIX=/opt/install/mbelib ..
+  make -j $(nproc) install
+#+end_src
+** SerialDV
+#+begin_src shell
+  cd /opt/build
+  git clone https://github.com/f4exb/serialDV.git
+  cd serialDV
+  git reset --hard "v1.1.4"
+  mkdir build; cd build
+  cmake -Wno-dev -DCMAKE_INSTALL_PREFIX=/opt/install/serialdv ..
+  make -j $(nproc) install
+#+end_src
+** DSDcc
+#+begin_src shell
+  cd /opt/build
+  git clone https://github.com/f4exb/dsdcc.git
+  cd dsdcc
+  git reset --hard "v1.9.5"
+  mkdir build; cd build
+  cmake -Wno-dev -DCMAKE_INSTALL_PREFIX=/opt/install/dsdcc -DUSE_MBELIB=ON -DLIBMBE_INCLUDE_DIR=/opt/install/mbelib/include -DLIBMBE_LIBRARY=/opt/install/mbelib/lib/libmbe.so -DLIBSERIALDV_INCLUDE_DIR=/opt/install/serialdv/include/serialdv -DLIBSERIALDV_LIBRARY=/opt/install/serialdv/lib/libserialdv.so ..
+  make -j $(nproc) install
+#+end_src
+** Codec2/FreeDV
+#+begin_src shell
+  cd /opt/build
+  git clone https://github.com/drowe67/codec2-dev.git codec2
+  cd codec2
+  git reset --hard "v1.0.3"
+  mkdir build_linux; cd build_linux
+  cmake -Wno-dev -DCMAKE_INSTALL_PREFIX=/opt/install/codec2 ..
+  make -j $(nproc) install
+#+end_src
+** SGP4
+#+begin_src shell
+  cd /opt/build
+  git clone https://github.com/dnwrnr/sgp4.git
+  cd sgp4
+  mkdir build; cd build
+  cmake -Wno-dev -DCMAKE_INSTALL_PREFIX=/opt/install/sgp4 ..
+  make -j $(nproc) install
+#+end_src
+** LibSigMF
+#+begin_src shell
+  cd /opt/build
+  git clone https://github.com/f4exb/libsigmf.git
+  cd libsigmf
+  git checkout "new-namespaces"
+  mkdir build; cd build
+  cmake -Wno-dev -DCMAKE_INSTALL_PREFIX=/opt/install/libsigmf .. 
+  make -j $(nproc) install
+#+end_src
+** GGMorse
+#+begin_src shell
+  cd /opt/build
+  git clone https://github.com/ggerganov/ggmorse.git
+  cd ggmorse
+  mkdir build; cd build
+  cmake -Wno-dev -DCMAKE_INSTALL_PREFIX=/opt/install/ggmorse -DGGMORSE_BUILD_TESTS=OFF -DGGMORSE_BUILD_EXAMPLES=OFF ..
+  make -j $(nproc) install
+#+end_src
+** Radios
+The ones that I don't have or don't have access to are with the =:notangle= option. If you need it, remove the :notangle from desired opts, and remove the matching =-DENABLE_BLADERF= starting line from the cmake command in the next section.
+I am also omitting plutoSDR, USRP and XTRX completely.
+*** Airspy
+#+begin_src shell :notangle
+  cd /opt/build
+  git clone https://github.com/airspy/airspyone_host.git libairspy
+  cd libairspy
+  git reset --hard 37c768ce9997b32e7328eb48972a7fda0a1f8554
+  mkdir build; cd build
+  cmake -Wno-dev -DCMAKE_INSTALL_PREFIX=/opt/install/libairspy ..
+  make -j $(nproc) install
+#+end_src
+*** SDRPlay RSP1
+#+begin_src shell :notangle
+  cd /opt/build
+  git clone https://github.com/f4exb/libmirisdr-4.git
+  cd libmirisdr-4
+  mkdir build; cd build
+  cmake -Wno-dev -DCMAKE_INSTALL_PREFIX=/opt/install/libmirisdr ..
+  make -j $(nproc) install
+#+end_src
+*** RTL-SRT
+#+begin_src shell
+  cd /opt/build
+  git clone https://github.com/osmocom/rtl-sdr.git librtlsdr
+  cd librtlsdr
+  git reset --hard 420086af84d7eaaf98ff948cd11fea2cae71734a 
+  mkdir build; cd build
+  cmake -Wno-dev -DDETACH_KERNEL_DRIVER=ON -DCMAKE_INSTALL_PREFIX=/opt/install/librtlsdr ..
+  make -j $(nproc) install
+#+end_src
+*** BladeRF
+#+begin_src shell :notangle
+  cd /opt/build
+  git clone https://github.com/Nuand/bladeRF.git
+  cd bladeRF/host
+  git reset --hard "2023.02"
+  mkdir build; cd build
+  cmake -Wno-dev -DCMAKE_INSTALL_PREFIX=/opt/install/libbladeRF -DINSTALL_UDEV_RULES=OFF ..
+  make -j $(nproc) install
+#+end_src
+*** HackRF
+#+begin_src shell
+  cd /opt/build
+  git clone https://github.com/greatscottgadgets/hackrf.git
+  cd hackrf/host
+  git reset --hard "v2022.09.1"
+  mkdir build; cd build
+  cmake -Wno-dev -DCMAKE_INSTALL_PREFIX=/opt/install/libhackrf -DINSTALL_UDEV_RULES=OFF ..
+  make -j $(nproc) install
+#+end_src
+*** LimeSDR
+#+begin_src sh
+  cd /opt/build
+  git clone https://github.com/myriadrf/LimeSuite.git
+  cd LimeSuite
+  git reset --hard "v20.01.0"
+  mkdir builddir; cd builddir
+  cmake -Wno-dev -DCMAKE_INSTALL_PREFIX=/opt/install/LimeSuite ..
+  make -j $(nproc) install
+#+end_src
+*** AirspyHF
+#+begin_src shell :notangle
+  cd /opt/build
+  git clone https://github.com/airspy/airspyhf
+  cd airspyhf
+  git reset --hard 1af81c0ca18944b8c9897c3c98dc0a991815b686
+  mkdir build; cd build
+  cmake -Wno-dev -DCMAKE_INSTALL_PREFIX=/opt/install/libairspyhf ..
+  make -j $(nproc) install
+#+end_src
+*** Perseus
+#+begin_src shell :notangle
+  cd /opt/build
+  git clone https://github.com/f4exb/libperseus-sdr.git
+  cd libperseus-sdr
+  git checkout fixes
+  git reset --hard afefa23e3140ac79d845acb68cf0beeb86d09028
+  mkdir build; cd build
+  cmake -Wno-dev -DCMAKE_INSTALL_PREFIX=/opt/install/libperseus ..
+  make -j $(nproc)
+  make install
+#+end_src
+*** SoapySDR and its modules
+Probably unnecessary to have anything aside from the remote, but doesn't build all that long, and shouldn't hurt either
+#+begin_src shell
+  cd /opt/build
+  git clone https://github.com/pothosware/SoapySDR.git
+  cd SoapySDR
+  git reset --hard "soapy-sdr-0.7.1"
+  mkdir build; cd build
+  cmake -DCMAKE_INSTALL_PREFIX=/opt/install/SoapySDR ..
+  make -j $(nproc) install
+#+end_src
+**** RTL-SDR
+#+begin_src shell
+  cd /opt/build
+  git clone https://github.com/pothosware/SoapyRTLSDR.git
+  cd SoapyRTLSDR
+  mkdir build; cd build
+  cmake -DCMAKE_INSTALL_PREFIX=/opt/install/SoapySDR  -DRTLSDR_INCLUDE_DIR=/opt/install/librtlsdr/include -DRTLSDR_LIBRARY=/opt/install/librtlsdr/lib/librtlsdr.so -DSOAPY_SDR_INCLUDE_DIR=/opt/install/SoapySDR/include -DSOAPY_SDR_LIBRARY=/opt/install/SoapySDR/lib/libSoapySDR.so ..
+  make -j $(nproc) install
+#+end_src
+**** HackRF
+#+begin_src shell
+  cd /opt/build
+  git clone https://github.com/pothosware/SoapyHackRF.git
+  cd SoapyHackRF
+  mkdir build; cd build
+  cmake -DCMAKE_INSTALL_PREFIX=/opt/install/SoapySDR -DLIBHACKRF_INCLUDE_DIR=/opt/install/libhackrf/include/libhackrf -DLIBHACKRF_LIBRARY=/opt/install/libhackrf/lib/libhackrf.so -DSOAPY_SDR_INCLUDE_DIR=/opt/install/SoapySDR/include -DSOAPY_SDR_LIBRARY=/opt/install/SoapySDR/lib/libSoapySDR.so ..
+  make -j $(nproc) install
+#+end_src
+**** LimeSDR
+#+begin_src shell
+  cd /opt/build
+  cd LimeSuite/builddir
+  cmake -Wno-dev -DCMAKE_INSTALL_PREFIX=/opt/install/LimeSuite -DCMAKE_PREFIX_PATH=/opt/install/SoapySDR ..
+  make -j $(nproc) install
+  cp /opt/install/LimeSuite/lib/SoapySDR/modules0.7/libLMS7Support.so /opt/install/SoapySDR/lib/SoapySDR/modules0.7
+#+end_src
+**** Soapy remote
+#+begin_src shell
+  cd /opt/build
+  git clone https://github.com/pothosware/SoapyRemote.git
+  cd SoapyRemote
+  git reset --hard "soapy-remote-0.5.1"
+  mkdir build; cd build
+  cmake -DCMAKE_INSTALL_PREFIX=/opt/install/SoapySDR -DSOAPY_SDR_INCLUDE_DIR=/opt/install/SoapySDR/include -DSOAPY_SDR_LIBRARY=/opt/install/SoapySDR/lib/libSoapySDR.so ..
+  make -j $(nproc) install
+#+end_src
+* Build SDRAngel
+You may need to tweak the cmake command below if you mande any module changes above.
+#+begin_src shell :tangle ./generated/sdrangel-2-install.sh :mkdirp yes
+  cd /opt/build
+  git clone https://github.com/f4exb/sdrangel.git
+  cd sdrangel
+  mkdir build
+  cd build
+  cd /opt/build/sdrangel/build
+  cmake -Wno-dev -DRX_SAMPLE_24BIT=ON \
+  -DCMAKE_BUILD_TYPE=RelWithDebInfo \
+  -DMIRISDR_DIR=/opt/install/libmirisdr \
+  -DAIRSPY_DIR=/opt/install/libairspy \
+  -DAIRSPYHF_DIR=/opt/install/libairspyhf \
+  -DBLADERF_DIR=/opt/install/libbladeRF \
+  -DHACKRF_DIR=/opt/install/libhackrf \
+  -DRTLSDR_DIR=/opt/install/librtlsdr \
+  -DLIMESUITE_DIR=/opt/install/LimeSuite \
+  -DIIO_DIR=/opt/install/libiio \
+  -DSOAPYSDR_DIR=/opt/install/SoapySDR \
+  -DUHD_DIR=/opt/install/uhd \
+  -DAPT_DIR=/opt/install/aptdec \
+  -DCM256CC_DIR=/opt/install/cm256cc \
+  -DDSDCC_DIR=/opt/install/dsdcc \
+  -DSERIALDV_DIR=/opt/install/serialdv \
+  -DMBE_DIR=/opt/install/mbelib \
+  -DCODEC2_DIR=/opt/install/codec2 \
+  -DSGP4_DIR=/opt/install/sgp4 \
+  -DLIBSIGMF_DIR=/opt/install/libsigmf \
+  -DDAB_DIR=/opt/install/libdab \
+  -DGGMORSE_DIR=/opt/install/ggmorse \
+  -DENABLE_AIRSPY=OFF \
+  -DENABLE_AIRSPYHF=OFF \
+  -DENABLE_BLADERF=OFF \
+  -DENABLE_MIRISDR=OFF \
+  -DENABLE_PERSEUS=OFF \
+  -DENABLE_SDRPLAY=OFF \
+  -DENABLE_USRP=OFF \
+  -DENABLE_XTRX=OFF \
+  -DCMAKE_INSTALL_PREFIX=/opt/install/sdrangel ..
+  make -j $(nproc) install
+#+end_src
