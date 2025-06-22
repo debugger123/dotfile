@@ -231,7 +231,7 @@
   (defun dotns/modeline--color-hook ()
     (modus-themes-with-colors
       (custom-set-faces
-       `(mode-line ((t :background ,bg-active-accent :box nil))))
+       `(mode-line ((t :box nil))))
       (custom-set-faces
        `(mode-line-inactive ((t :background ,bg-inactive :box nil))))))
 
@@ -634,7 +634,7 @@ Allocates workspaces to monitors if exwm is used.
       (when (executable-find "nm-tray")
         (dotns/run-silently "nm-tray"))
 
-      (exwm-enable)
+      (exwm-wm-mode 1)
 
       (require 'exwm-randr)
       (add-hook 'exwm-randr-screen-change-hook #'dotns/exwm-screens-changed)
@@ -693,22 +693,11 @@ Some applications, such as vmware horizon client, read their theme-related setti
       (gsettings-set-from-gvariant-string "org.gnome.desktop.interface" "monospace-font-name" "Liberation Mono")))
 #+end_src
 ** Completion systems
-*** Corfu
+*** Popup completion (company(
 #+begin_src emacs-lisp
-  (use-package corfu :straight t
-    :config (setq corfu-auto t
-                  corfu-auto-delay 0.1
-                  corfu-min-width 20
-                  corfu-auto-prefix 1
-                  corfu-preview-current t
-                  corfu-echo-delay 0.1
-                  corfu-quit-no-match 'separator)
-    (global-corfu-mode)
-    (add-hook 'corfu-mode-hook 'corfu-echo-mode)
-    (add-hook 'eshell-mode-hook (lambda () (setq-local corfu-auto nil))))
-
-  (use-package nerd-icons-corfu :straight t
-    :config (add-to-list 'corfu-margin-formatters #'nerd-icons-corfu-formatter))
+  (use-package company :straight t
+    :custom
+    (company-minimum-prefix-length 2))
 
   ;; pcomplete git commands
   (defconst pcmpl-git-commands
@@ -939,7 +928,7 @@ Some applications, such as vmware horizon client, read their theme-related setti
     (undo-tree-visualizer-diff t)
     :bind ( :map text-mode-map
             ("C-x u" . undo-tree-visualize))
-    :hook (text-mode . undo-tree-mode))
+    :hook (text-mode-hook . undo-tree-mode))
 #+end_src
 *** Avy
 #+begin_src emacs-lisp
