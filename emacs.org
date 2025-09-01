@@ -203,7 +203,7 @@
                        dotns/modeline-buffer-name
                        dotns/modeline-major-mode
                        dotns/modeline-vc
-                       dotns/modeline-eglot
+                       ;; dotns/modeline-eglot
                        dotns/modeline-time))
     (put construct 'risky-local-variable t))
 
@@ -218,7 +218,7 @@
                   " " dotns/modeline-icon " " dotns/modeline-buffer-name
                   dotns/modeline-vc
                   dotns/modeline-major-mode
-                  dotns/modeline-eglot
+                  ;; dotns/modeline-eglot
 
                   ;; Can be simplified in emacs 30
                   (:eval (propertize " " 'display `((space :align-to (- right-fringe ,(string-width (format-time-string display-time-string)))))))
@@ -414,8 +414,7 @@
     (add-to-list 'org-structure-template-alist '("js" . "src javascript"))
     (add-to-list 'org-structure-template-alist '("lua" . "src lua")))
 
-  (use-package org-roam :straight t
-    :after org
+  (use-package org-roam :straight t :defer t
     :custom
     (org-roam-directory "~/ORoam")
     (org-roam-completion-everywhere t)
@@ -496,6 +495,16 @@ Allocates workspaces to monitors if exwm is used.
   (defun dotns/run-silently (cmd)
     (call-process-shell-command (concat cmd "&") nil 0))
 
+  (defun dotns/run-silently-split-below (cmd)
+    (dotns/run-silently cmd)
+    (split-window-below)
+    (windmove-down))
+
+  (defun dotns/run-silently-split-right (cmd)
+    (dotns/run-silently cmd)
+    (split-window-right)
+    (windmove-right))
+
   (when (equal (getenv "EXWM") "true")
     (message "EXWM env var is set, loading exwm")
 
@@ -508,20 +517,66 @@ Allocates workspaces to monitors if exwm is used.
       (dotns/run-silently "unclutter -idle 5")
       (dotns/run-silently "lxpolkit"))
 
-    (defun dotns/run-silently-split-below (cmd)
-      (dotns/run-silently cmd)
-      (split-window-below)
-      (windmove-down))
-
-    (defun dotns/run-silently-split-right (cmd)
-      (dotns/run-silently cmd)
-      (split-window-right)
-      (windmove-right))
-
     (defun dotns/run-silently-split-on-prefix (command) ""
            (cond ((eq current-prefix-arg 2) (dotns/run-silently-split-below command))
                  ((eq current-prefix-arg 3) (dotns/run-silently-split-right command))
                  (t (dotns/run-silently command))))
+
+    (when (executable-find "brightnessctl")
+      (defun dotns/brightness-get-percent-str () "gets current brightness %"
+             (let ((output (string-trim (shell-command-to-string "brightnessctl"))))
+               (save-match-data
+                 (string-match "\\([0-9]+%\\)" output)
+                 (match-string 1 output))))
+
+      (defun dotns/brightness-set-relative (newbrightness) ""
+             (shell-command-to-string (format "brightnessctl set %s" newbrightness))
+             (message "Brightness set to %s" (dotns/brightness-get-percent-str))))
+
+    (when (executable-find "amixer")
+      (defun dotns/volume-get () ""
+             (let ((output (string-trim (shell-command-to-string "amixer get Master"))))
+               (save-match-data
+                 (string-match "\\([0-9]+%\\)" output)
+                 (match-string 1 output))))
+
+      (defun dotns/volume-set-relative (newvolume) ""
+             (shell-command-to-string (format "amixer set Master %s" newvolume))
+             (message "Volume set to %s" (dotns/volume-get)))
+
+      (defun dotns/volume-toggle-mute () ""
+             (interactive)
+             (let ((output (string-trim (shell-command-to-string "amixer set Master toggle"))))
+               (save-match-data
+                 (string-match (rx (or "[on]" "[off]")) output)
+                 (message "Sound %s" (match-string 0 output))))))
+
+    (when (executable-find "flameshot")
+      (defun dotns/screenshot () ""
+             (interactive)
+             (dotns/run-silently "flameshot gui")))
+
+    (when (executable-find "xsecurelock")
+      (defun dotns/lock-session () ""
+             (interactive)
+             (dotns/run-silently "xsecurelock")))
+
+    (when (executable-find "playerctl")
+      (defun dotns/media-play-pause () ""
+             (interactive)
+             (message "%s" (string-trim (shell-command-to-string "playerctl play-pause"))))
+
+      (defun dotns/media-track-prev () ""
+             (interactive)
+             (message "%s" (string-trim (shell-command-to-string "playerctl previous"))))
+
+      (defun dotns/media-track-next () ""
+             (interactive)
+             (message "%s" (string-trim (shell-command-to-string "playerctl next"))))
+
+      (defun dotns/media-track-stop () ""
+             (interactive)
+             (message "%s" (string-trim (shell-command-to-string "playerctl stop")))))
 
     ;; exwm-occupied windows survive kill-buffer-and-window, the X window gets killed though
     (defun dotns/kill-buffer-and-window ()
@@ -597,6 +652,55 @@ Allocates workspaces to monitors if exwm is used.
          (,(kbd "C-s-<up>") . enlarge-window)
          (,(kbd "C-s-<down>") . shrink-window)
 
+         (,(kbd "<XF86MonBrightnessUp>") . (lambda ()
+                                             (interactive)
+                                             (when (executable-find "brightnessctl")
+                                               (dotns/brightness-set-relative "10%+"))))
+         (,(kbd "<XF86MonBrightnessDown>") . (lambda ()
+                                             (interactive)
+                                             (when (executable-find "brightnessctl")
+                                               (dotns/brightness-set-relative "10%-"))))
+         (,(kbd "S-<XF86MonBrightnessUp>") . (lambda ()
+                                               (interactive)
+                                               (when (executable-find "brightnessctl")
+                                                 (dotns/brightness-set-relative "1%+"))))
+         (,(kbd "S-<XF86MonBrightnessDown>") . (lambda ()
+                                                 (interactive)
+                                                 (when (executable-find "brightnessctl")
+                                                   (dotns/brightness-set-relative "1%-"))))
+
+         (,(kbd "<XF86AudioRaiseVolume>") . (lambda ()
+                                             (interactive)
+                                             (when (executable-find "amixer")
+                                               (dotns/volume-set-relative "10%+"))))
+         (,(kbd "<XF86AudioLowerVolume>") . (lambda ()
+                                             (interactive)
+                                             (when (executable-find "amixer")
+                                               (dotns/volume-set-relative "10%-"))))
+         (,(kbd "S-<XF86AudioRaiseVolume>") . (lambda ()
+                                               (interactive)
+                                               (when (executable-find "amixer")
+                                                 (dotns/volume-set-relative "1%+"))))
+         (,(kbd "S-<XF86AudioLowerVolume>") . (lambda ()
+                                                 (interactive)
+                                                 (when (executable-find "amixer")
+                                                   (dotns/volume-set-relative "1%-"))))
+         (,(kbd "<XF86AudioMute>") . dotns/volume-toggle-mute)
+         (,(kbd "<XF86AudioPlay>") . dotns/media-play-pause)
+         (,(kbd "<XF86AudioPause>") . dotns/media-play-pause)
+         (,(kbd "<XF86AudioPrev>") . dotns/media-track-prev)
+         (,(kbd "<XF86AudioNext>") . dotns/media-track-next)
+         (,(kbd "<XF86AudioStop>") . dotns/media-track-stop)
+
+         (,(kbd "<print>") . dotns/screenshot)
+         (,(kbd "s-l") . dotns/lock-session)
+         (,(kbd "<XF86ScreenSaver>") . dotns/lock-session)
+         (,(kbd "<XF86Sleep>") . dotns/lock-session)
+
+         (,(kbd "<XF86Mail>") . (lambda () (interactive) (dotns/run-silently-split-on-prefix "terminology")))
+         (,(kbd "<XF86HomePage>") . (lambda () (interactive) (dotns/run-silently-split-on-prefix "firefox")))
+         (,(kbd "<XF86Explorer>") . (lambda () (interactive) (dired ".")))
+
          ([?\s-&] . (lambda (command)
                       (interactive (list (read-shell-command "$ ")))
                       (dotns/run-silently-split-on-prefix command)))
@@ -615,11 +719,6 @@ Allocates workspaces to monitors if exwm is used.
                    (number-sequence 0 9))))
       :config
 
-      (global-set-key (kbd "<XF86HomePage>") (lambda () (interactive) (dotns/run-silently-split-on-prefix "firefox")))
-      (global-set-key (kbd "<XF86Explorer>") (lambda () (interactive) (dired ".")))
-      (global-set-key (kbd "<XF86Mail>") (lambda () (interactive) (dotns/run-silently-split-on-prefix "terminology")))
-      (global-set-key (kbd "<XF86Sleep>") (lambda () (interactive) (desktop-environment-lock-screen)))
-
       (add-hook 'exwm-init-hook #'dotns/exwm-init-hook)
       (add-hook 'exwm-update-class-hook #'dotns/exwm-update-buffer-name)
       (add-hook 'exwm-update-title-hook #'dotns/exwm-update-buffer-name)
@@ -634,10 +733,10 @@ Allocates workspaces to monitors if exwm is used.
       (when (executable-find "nm-tray")
         (dotns/run-silently "nm-tray"))
 
-      (exwm-wm-mode 1)
+      (exwm-wm-mode)
 
       (require 'exwm-randr)
-      (add-hook 'exwm-randr-screen-change-hook #'dotns/exwm-screens-changed)
+      (add-hook 'exwm-randr-screen-change-hook 'dotns/exwm-screens-changed)
       (exwm-randr-mode 1)
 
       (require 'exwm-systemtray)
@@ -650,16 +749,7 @@ Makes basic shortcuts, like adjusting brightness, volume, taking screenshots, lo
     (use-package ednc :straight t
       :after exwm
       :config
-      (ednc-mode 1))
-
-    (use-package desktop-environment
-      :straight t
-      :after exwm
-      :custom
-      (desktop-environment-screenshot-command "flameshot gui")
-      (desktop-environment-screenlock-command "xsecurelock")
-      :config
-      (desktop-environment-mode 1)))
+      (ednc-mode 1)))
 #+end_src
 *** XSettings
 Apply GTK themes when changing the emacs theme between a light and a dark one.
